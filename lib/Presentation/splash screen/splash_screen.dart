@@ -1,9 +1,7 @@
-import 'package:elfouad_coffee_beans/Presentation/features/sales/view/cashier_screen.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/cashier_screen.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/services/firebase_options.dart' show DefaultFirebaseOptions;
 
@@ -81,13 +79,13 @@ class _SplashScreenState extends State<SplashScreen>
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
-      await _setupFCM();
+      // await _setupFCM();
 
       await Future.delayed(const Duration(seconds: 5));
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const CashierScreen()),
+          MaterialPageRoute(builder: (_) => CashierHome()),
         );
       }
     } catch (e) {
@@ -95,20 +93,20 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  Future<void> _setupFCM() async {
-    if (await Permission.notification.request().isGranted) {
-      print("✅ Notification permission granted");
-    }
+  // Future<void> _setupFCM() async {
+  //   if (await Permission.notification.request().isGranted) {
+  //     print("✅ Notification permission granted");
+  //   }
 
-    await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+  //   await FirebaseMessaging.instance.requestPermission(
+  //     alert: true,
+  //     badge: true,
+  //     sound: true,
+  //   );
 
-    final token = await FirebaseMessaging.instance.getToken();
-    print("📲 FCM Token: $token");
-  }
+  //   final token = await FirebaseMessaging.instance.getToken();
+  //   print("📲 FCM Token: $token");
+  // }
 
   @override
   void dispose() {
@@ -120,42 +118,61 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final size = MediaQuery.of(context).size;
+    final screenWidth = size.width;
+    final screenHeight = size.height;
 
     return AnimatedBuilder(
       animation: _bgAnimation,
       builder: (context, child) => Scaffold(
         backgroundColor: _bgAnimation.value,
         body: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              child: RotationTransition(
-                turns: _rotateAnimation,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Logo
-                    Image.asset(
-                      "assets/logo.png",
-                      width: screenWidth * 0.4, // 35% of screen width
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Shop name image instead of text
-                    SlideTransition(
-                      position: _textSlide,
-                      child: Image.asset(
-                        "assets/name.png",
-                        width: screenWidth * 0.65, // 50% of screen width
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth:
+                  500, // 🖥️ لو الشاشة عريضة (تابلت/لابتوب) نخلي المحتوى ثابت العرض
+            ),
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: RotationTransition(
+                  turns: _rotateAnimation,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Logo
+                      Image.asset(
+                        "assets/logo.png",
+                        width: screenWidth * 0.35,
+                        height: screenHeight * 0.2,
+                        fit: BoxFit.contain,
                       ),
-                    ),
 
-                    const SizedBox(height: 40),
-                    CircularProgressIndicator(color: Color(0xFF543824)),
-                  ],
+                      SizedBox(height: screenHeight * 0.03),
+
+                      // Shop name
+                      SlideTransition(
+                        position: _textSlide,
+                        child: Image.asset(
+                          "assets/name.png",
+                          width: screenWidth * 0.6,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+
+                      SizedBox(height: screenHeight * 0.05),
+
+                      SizedBox(
+                        height: screenHeight * 0.04,
+                        width: screenHeight * 0.04,
+                        child: const CircularProgressIndicator(
+                          color: Color(0xFF543824),
+                          strokeWidth: 3,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
