@@ -6,7 +6,7 @@ Future<void> seedBlends() async {
   final batch = firestore.batch();
 
   final allBlends = [
-    // === التوليفات الأساسية ===
+    // === توليفة كلاسيك ===
     {
       "name": "توليفة كلاسيك",
       "variant": "فاتح",
@@ -16,6 +16,7 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة كلاسيك",
@@ -26,6 +27,7 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة كلاسيك",
@@ -36,8 +38,10 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
 
+    // === توليفة مخصوص ===
     {
       "name": "توليفة مخصوص",
       "variant": "فاتح",
@@ -47,6 +51,7 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة مخصوص",
@@ -57,6 +62,7 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة مخصوص",
@@ -67,8 +73,10 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
 
+    // === توليفة اسبيشيال ===
     {
       "name": "توليفة اسبيشيال",
       "variant": "فاتح",
@@ -78,6 +86,7 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة اسبيشيال",
@@ -88,6 +97,7 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة اسبيشيال",
@@ -98,8 +108,10 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
 
+    // === توليفة الفؤاد ===
     {
       "name": "توليفة الفؤاد",
       "variant": "فاتح",
@@ -109,6 +121,7 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة الفؤاد",
@@ -119,6 +132,7 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة الفؤاد",
@@ -129,8 +143,10 @@ Future<void> seedBlends() async {
       "minLevel": 300,
       "sellPrice": 220,
       "costPrice": 170,
+      "image": "assets/blends.jpg",
     },
 
+    // === اسبريسو (بدون تحميص) ===
     {
       "name": "توليفة اسبريسو",
       "variant": "",
@@ -138,11 +154,12 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPrice": 260,
+      "costPrice": 200,
+      "image": "assets/blends.jpg",
     },
 
-    // === النكهات ===
+    // === النكهات (بدون تحميص) ===
     {
       "name": "قهوة بندق",
       "variant": "",
@@ -152,6 +169,7 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "قهوة بندق قطع",
@@ -162,6 +180,7 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "توليفة فرنساوي",
@@ -172,6 +191,7 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "قهوة مانجو",
@@ -182,6 +202,7 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "قهوة توت",
@@ -192,6 +213,7 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "قهوة فراولة",
@@ -202,6 +224,7 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "قهوة كراميل",
@@ -212,6 +235,7 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "قهوة فانيليا",
@@ -222,6 +246,7 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
     {
       "name": "قهوة شوكلت",
@@ -232,14 +257,14 @@ Future<void> seedBlends() async {
       "minLevel": 500,
       "sellPrice": 200,
       "costPrice": 150,
+      "image": "assets/blends.jpg",
     },
   ];
 
   for (var b in allBlends) {
     final doc = blends.doc();
-    batch.set(doc, b);
+    batch.set(doc, {...b, 'createdAt': DateTime.now().toUtc()});
   }
-
   await batch.commit();
   print("✅ Seeded ${allBlends.length} blends");
 }

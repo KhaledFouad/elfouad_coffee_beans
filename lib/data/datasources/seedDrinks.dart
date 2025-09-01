@@ -1,174 +1,202 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Key helper: name|variant (variant ممكن يبقى فاضي "")
+String _k(String name, String? variant) =>
+    '${name.trim()}|${(variant ?? '').trim()}';
+
 Future<void> seedDrinks() async {
-  print("🚀 Seeding started for drinks...");
+  print("🚀 Seeding drinks with IDs (no name-matching)...");
+  final db = FirebaseFirestore.instance;
 
-  final firestore = FirebaseFirestore.instance;
-  final drinks = firestore.collection('drinks');
-  final products = firestore.collection('blends'); // خليه من blends مش products
-  final batch = firestore.batch();
-
-  try {
-    Future<num> getCostPerGram(String name, [String? variant]) async {
-      Query query = products.where('name', isEqualTo: name);
-      if (variant != null && variant.trim().isNotEmpty) {
-        query = query.where('variant', isEqualTo: variant);
-      }
-      final snap = await query.limit(1).get();
-      if (snap.docs.isEmpty) {
-        throw Exception("❌ المنتج $name ${variant ?? ''} مش موجود في blends");
-      }
-      final data = snap.docs.first.data() as Map<String, dynamic>;
-      return (data['costPrice'] as num) / 1000;
-    }
-
-    // جيب أسعار البن
-    final turkishLight = await getCostPerGram("توليفة اسبيشيال", "فاتح");
-    final turkishMedium = await getCostPerGram("توليفة اسبيشيال", "وسط");
-    final turkishDark = await getCostPerGram("توليفة اسبيشيال", "غامق");
-    final espresso = await getCostPerGram("توليفة اسبريسو");
-    final frenchCoffee = await getCostPerGram("توليفة فرنساوي");
-    final chocolateCoffee = await getCostPerGram("قهوة شوكلت");
-    final vanillaCoffee = await getCostPerGram("قهوة فانيليا");
-    final hazelnutCoffee = await getCostPerGram("قهوة بندق");
-    final hazelnutPiecesCoffee = await getCostPerGram("قهوة بندق قطع");
-    final caramelCoffee = await getCostPerGram("قهوة كراميل");
-    final mangoCoffee = await getCostPerGram("قهوة مانجو");
-    final berryCoffee = await getCostPerGram("قهوة توت");
-    final strawberryCoffee = await getCostPerGram("قهوة فراولة");
-
-    final allDrinks = [
-      {
-        "name": "قهوة تركي",
-        "variant": "فاتح",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 15,
-        "costPrice": turkishLight * 10,
-        "consumes": {"توليفة اسبيشيال فاتح": 10},
-      },
-      {
-        "name": "قهوة تركي",
-        "variant": "وسط",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 15,
-        "costPrice": turkishMedium * 10,
-        "consumes": {"توليفة اسبيشيال وسط": 10},
-      },
-      {
-        "name": "قهوة تركي",
-        "variant": "غامق",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 15,
-        "costPrice": turkishDark * 10,
-        "consumes": {"توليفة اسبيشيال غامق": 10},
-      },
-
-      {
-        "name": "قهوة اسبريسو",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 20,
-        "costPrice": espresso * 8,
-        "consumes": {"توليفة اسبريسو": 8},
-      },
-
-      {
-        "name": "قهوة بندق",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": hazelnutCoffee * 20,
-        "consumes": {"قهوة بندق": 20},
-      },
-
-      {
-        "name": "قهوة بندق قطع",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": hazelnutPiecesCoffee * 20,
-        "consumes": {"قهوة بندق قطع": 20},
-      },
-      {
-        "name": "قهوة فرنساوي",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": frenchCoffee * 15,
-        "consumes": {"توليفة فرنساوي": 15},
-      },
-      {
-        "name": "قهوة شوكلت",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": chocolateCoffee * 20,
-        "consumes": {"قهوة شوكلت": 20},
-      },
-      {
-        "name": "قهوة كراميل",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": caramelCoffee * 20,
-        "consumes": {"قهوة كراميل": 20},
-      },
-      {
-        "name": "قهوة فانيليا",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": vanillaCoffee * 20,
-        "consumes": {"قهوة فانيليا": 20},
-      },
-
-      {
-        "name": "قهوة مانجو",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": mangoCoffee * 17,
-        "consumes": {"قهوة مانجو": 17},
-      },
-      {
-        "name": "قهوة توت",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": berryCoffee * 17,
-        "consumes": {"قهوة توت": 17},
-      },
-      {
-        "name": "قهوة فراولة",
-        "variant": "",
-        "category": "مشروبات",
-        "unit": "cup",
-        "sellPrice": 25,
-        "costPrice": strawberryCoffee * 17,
-        "consumes": {"قهوة فراولة": 17},
-      },
-    ];
-
-    for (var d in allDrinks) {
-      final doc = drinks.doc();
-      batch.set(doc, d);
-    }
-
-    await batch.commit();
-    print("🎉 Done! Seeded ${allDrinks.length} drinks successfully.");
-  } catch (e) {
-    print("❌ Error while seeding drinks: $e");
+  // 1) اعمل Lookup من blends: name|variant -> {id, costPerGram}
+  final blendsSnap = await db.collection('blends').get();
+  final Map<String, Map<String, dynamic>> blendKey = {};
+  for (final d in blendsSnap.docs) {
+    final data = d.data();
+    final k = _k(
+      (data['name'] ?? '').toString(),
+      (data['variant'] ?? '').toString(),
+    );
+    final costPerKg = (data['costPrice'] ?? 0).toDouble();
+    blendKey[k] = {'id': d.id, 'costPerGram': costPerKg / 1000.0};
   }
+
+  String idOf(String name, [String? variant]) {
+    final k = _k(name, variant);
+    final v = blendKey[k];
+    if (v == null) {
+      throw '❌ مفيش blend بالاسم "$name" والتحميص "${variant ?? ''}" — عدّل seed_blends أو الأسماء هنا.';
+    }
+    return v['id'] as String;
+  }
+
+  double cpg(String name, [String? variant]) {
+    final k = _k(name, variant);
+    final v = blendKey[k];
+    if (v == null) return 0;
+    return (v['costPerGram'] as double);
+  }
+
+  // 2) عرّف المشروبات بالمنطق (مش IDs) وبعدين نحولها لـ IDs
+  final List<Map<String, dynamic>> drinksLogical = [
+    // تركي (له درجات تحميص): 10g/كوب من "توليفة اسبيشيال"
+    {
+      'name': 'قهوة تركي',
+      'unit': 'cup',
+      'sellPrice': 15.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': ['فاتح', 'وسط', 'غامق'],
+      // نكتبها كمنطق اسم/تحميص، وهنحوّلها IDs تحت
+      'perRoast': {
+        'فاتح': {'توليفة اسبيشيال': 10},
+        'وسط': {'توليفة اسبيشيال': 10},
+        'غامق': {'توليفة اسبيشيال': 10},
+      },
+    },
+
+    // اسبريسو: 8g/كوب من "توليفة اسبريسو" بدون تحميص
+    {
+      'name': 'قهوة اسبريسو',
+      'unit': 'cup',
+      'sellPrice': 20.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'توليفة اسبريسو': 8},
+    },
+
+    // فرنساوي: 15g/كوب من "توليفة فرنساوي"
+    {
+      'name': 'قهوة فرنساوي',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'توليفة فرنساوي': 15},
+    },
+
+    // نكهات (20g/كوب)
+    {
+      'name': 'قهوة بندق',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'قهوة بندق': 20},
+    },
+    {
+      'name': 'قهوة بندق قطع',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'قهوة بندق قطع': 20},
+    },
+    {
+      'name': 'قهوة شوكلت',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'قهوة شوكلت': 20},
+    },
+    {
+      'name': 'قهوة فانيليا',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'قهوة فانيليا': 20},
+    },
+    {
+      'name': 'قهوة كراميل',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'قهوة كراميل': 20},
+    },
+    {
+      'name': 'قهوة مانجو',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'قهوة مانجو': 17},
+    },
+    {
+      'name': 'قهوة توت',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'قهوة توت': 17},
+    },
+    {
+      'name': 'قهوة فراولة',
+      'unit': 'cup',
+      'sellPrice': 25.0,
+      'image': 'assets/drinks.jpg',
+      'roastLevels': <String>[],
+      'consumes': {'قهوة فراولة': 17},
+    },
+  ];
+
+  // 3) حوِّل المنطقي إلى سكيمة نهائية بالـ IDs
+  final batch = db.batch();
+  for (final d in drinksLogical) {
+    final name = d['name'] as String;
+    final unit = d['unit'] ?? 'cup';
+    final sellPrice = (d['sellPrice'] ?? 0).toDouble();
+    final image = d['image'] ?? 'assets/drinks.jpg';
+    final roastLevels = (d['roastLevels'] as List)
+        .map((e) => e.toString())
+        .toList();
+
+    Map<String, num>? consumesById; // لمشروب بدون تحميص
+    Map<String, Map<String, num>>? consumesByRoast; // لمشروب بتحميص
+
+    double cupCost = 0; // اختياري—نحسبه للعرض السريع
+
+    if (d.containsKey('perRoast')) {
+      // مثال تركي: لكل Roast عندك map: اسم التوليفة -> grams
+      consumesByRoast = {};
+      (d['perRoast'] as Map<String, dynamic>).forEach((roast, baseMap) {
+        final m = <String, num>{};
+        (baseMap as Map<String, dynamic>).forEach((baseName, grams) {
+          final blendId = idOf(baseName, roast);
+          m[blendId] = (grams as num);
+          cupCost += cpg(baseName, roast) * (grams as num);
+        });
+        consumesByRoast![roast] = m;
+      });
+    } else {
+      // مفيش تحميص: map واحدة: اسم التوليفة -> grams
+      consumesById = {};
+      (d['consumes'] as Map<String, dynamic>).forEach((baseName, grams) {
+        final blendId = idOf(baseName, '');
+        consumesById![blendId] = (grams as num);
+        cupCost += cpg(baseName, '') * (grams as num);
+      });
+    }
+
+    final ref = db.collection('drinks').doc();
+    batch.set(ref, {
+      'name': name,
+      'unit': unit,
+      'sellPrice': sellPrice,
+      'image': image,
+      'roastLevels': roastLevels,
+      // الحقول المهمة:
+      if (consumesById != null) 'consumes': consumesById, // {blendDocId: grams}
+      if (consumesByRoast != null)
+        'consumesByRoast': consumesByRoast, // {roast: {blendDocId: grams}}
+      // (اختياري) تكلفة الكوب المرجعية وقت الـ seed:
+      'costPrice': double.parse(cupCost.toStringAsFixed(4)),
+      'createdAt': DateTime.now().toUtc(),
+    });
+    print('✅ Drink added: $name');
+  }
+
+  await batch.commit();
+  print("🎉 Done! Drinks seeded successfully.");
 }

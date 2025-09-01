@@ -1,11 +1,12 @@
-import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/cashier_screen.dart';
-import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:firebase_core/firebase_core.dart';
-
-import '../../core/services/firebase_options.dart' show DefaultFirebaseOptions;
+import 'dart:math';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/cashier_screen.dart';
+import 'package:elfouad_coffee_beans/core/error/diagnose.dart';
+import 'package:flutter/material.dart';
 
 class SplashScreen extends StatefulWidget {
+  static const String route = '/';
+
   const SplashScreen({super.key});
 
   @override
@@ -14,171 +15,205 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  late AnimationController _logoController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _rotateAnimation;
-  late AnimationController _bgController;
-  late Animation<Color?> _bgAnimation;
-  late AnimationController _textController;
-  late Animation<Offset> _textSlide;
+  late final AnimationController _logoController;
+  late final Animation<double> _scaleAnimation;
+
+  late final AnimationController _bgController;
+  late final Animation<Color?> _bgAnimation;
+
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
 
-    // Animations for logo
+    // Logo scale bounce
     _logoController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 1400),
     );
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.5,
-    ).animate(CurvedAnimation(parent: _logoController, curve: Curves.easeIn));
-
-    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.2).animate(
+    _scaleAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
       CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
     );
 
-    _rotateAnimation = Tween<double>(begin: -0.7, end: 0.0).animate(
-      CurvedAnimation(parent: _logoController, curve: Curves.easeOutBack),
-    );
-
-    // Background color animation
+    // Background gradient animation
     _bgController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
-    );
+      duration: const Duration(seconds: 5),
+    )..repeat(reverse: true);
     _bgAnimation = ColorTween(
-      begin: const Color(0xFF543824), // Cream Coffee
-      end: const Color.fromARGB(255, 255, 255, 255), // Beige
-    ).animate(_bgController);
-
-    // Text (or shop name image) animation
-    _textController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-    _textSlide = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _textController, curve: Curves.easeOut));
+      begin: const Color(0xFF4E342E),
+      end: const Color(0xFF6F4E37),
+    ).animate(CurvedAnimation(parent: _bgController, curve: Curves.easeInOut));
 
     _logoController.forward();
-    _bgController.forward();
-    Future.delayed(const Duration(seconds: 2), () => _textController.forward());
 
-    _initializeApp();
-  }
-
-  Future<void> _initializeApp() async {
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
+    _timer = Timer(const Duration(seconds: 3), () {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 700),
+          pageBuilder: (_, __, ___) => const CashierHome(),
+          transitionsBuilder: (_, anim, __, child) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.2),
+                end: Offset.zero,
+              ).animate(anim),
+              child: child,
+            ),
+          ),
+        ),
       );
-
-      // await _setupFCM();
-
-      await Future.delayed(const Duration(seconds: 5));
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => CashierHome()),
-        );
-      }
-    } catch (e) {
-      print("❌ Error initializing app: $e");
-    }
+    });
   }
-
-  // Future<void> _setupFCM() async {
-  //   if (await Permission.notification.request().isGranted) {
-  //     print("✅ Notification permission granted");
-  //   }
-
-  //   await FirebaseMessaging.instance.requestPermission(
-  //     alert: true,
-  //     badge: true,
-  //     sound: true,
-  //   );
-
-  //   final token = await FirebaseMessaging.instance.getToken();
-  //   print("📲 FCM Token: $token");
-  // }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _logoController.dispose();
     _bgController.dispose();
-    _textController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final screenWidth = size.width;
-    final screenHeight = size.height;
 
     return AnimatedBuilder(
       animation: _bgAnimation,
-      builder: (context, child) => Scaffold(
-        backgroundColor: _bgAnimation.value,
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth:
-                  500, // 🖥️ لو الشاشة عريضة (تابلت/لابتوب) نخلي المحتوى ثابت العرض
+      builder: (context, _) => Scaffold(
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _bgAnimation.value ?? const Color(0xFF6F4E37),
+                Colors.brown.shade900,
+              ],
             ),
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: RotationTransition(
-                  turns: _rotateAnimation,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logo
-                      Image.asset(
+          ),
+          child: Stack(
+            children: [
+              // خلفية Particles (حبوب قهوة)
+              Positioned.fill(child: _CoffeeBeansBackground()),
+
+              // محتوى Splash
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: Image.asset(
                         "assets/logo.png",
-                        width: screenWidth * 0.35,
-                        height: screenHeight * 0.2,
+                        width: size.width * 0.3,
                         fit: BoxFit.contain,
                       ),
-
-                      SizedBox(height: screenHeight * 0.03),
-
-                      // Shop name
-                      SlideTransition(
-                        position: _textSlide,
-                        child: Image.asset(
-                          "assets/name.png",
-                          width: screenWidth * 0.6,
-                          fit: BoxFit.contain,
-                        ),
+                    ),
+                    const SizedBox(height: 24),
+                    AnimatedOpacity(
+                      opacity: 1,
+                      duration: const Duration(milliseconds: 1200),
+                      child: Image.asset(
+                        "assets/name.png",
+                        width: size.width * 0.5,
+                        fit: BoxFit.contain,
                       ),
-
-                      SizedBox(height: screenHeight * 0.05),
-
-                      SizedBox(
-                        height: screenHeight * 0.04,
-                        width: screenHeight * 0.04,
-                        child: const CircularProgressIndicator(
-                          color: Color(0xFF543824),
-                          strokeWidth: 3,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 40),
+                    const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+/// Widget بيرسم دوائر متحركة كأنها حبوب قهوة صغيرة
+class _CoffeeBeansBackground extends StatefulWidget {
+  @override
+  State<_CoffeeBeansBackground> createState() => _CoffeeBeansBackgroundState();
+}
+
+class _CoffeeBeansBackgroundState extends State<_CoffeeBeansBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  final Random _random = Random();
+  final int _beanCount = 18;
+
+  late final List<_Bean> _beans;
+
+  @override
+  void initState() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await diagnoseInventory();
+    });
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat();
+    _beans = List.generate(_beanCount, (_) => _Bean(_random));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) =>
+          CustomPaint(painter: _BeanPainter(_beans, _controller.value)),
+    );
+  }
+}
+
+class _Bean {
+  final double x;
+  final double y;
+  final double radius;
+  final double speed;
+
+  _Bean(Random rnd)
+    : x = rnd.nextDouble(),
+      y = rnd.nextDouble(),
+      radius = rnd.nextDouble() * 6 + 4,
+      speed = rnd.nextDouble() * 0.0008 + 0.0003;
+}
+
+class _BeanPainter extends CustomPainter {
+  final List<_Bean> beans;
+  final double progress;
+  _BeanPainter(this.beans, this.progress);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.black.withOpacity(0.08);
+    for (final b in beans) {
+      final dy = (b.y + progress * b.speed * 200) % 1.2;
+      canvas.drawCircle(
+        Offset(b.x * size.width, dy * size.height),
+        b.radius,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BeanPainter old) => true;
 }
