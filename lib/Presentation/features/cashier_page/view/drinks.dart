@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/DrinkDialog.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
-// logError(..), showErrorDialog(..)
 
 class DrinksPage extends StatelessWidget {
   const DrinksPage({super.key});
@@ -11,6 +10,47 @@ class DrinksPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // ===== AppBar رايق بجراديانت وحدود سفلية ناعمة =====
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(64),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(24),
+          ),
+          child: AppBar(
+            automaticallyImplyLeading: false,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+              ),
+              onPressed: () => Navigator.maybePop(context),
+              tooltip: 'رجوع',
+            ),
+            title: const Text(
+              'المشروبات',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 35,
+                color: Colors.white,
+              ),
+            ),
+            centerTitle: true,
+            elevation: 8,
+            backgroundColor: Colors.transparent,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF5D4037), Color(0xFF795548)],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance.collection('drinks').snapshots(),
         builder: (context, snap) {
@@ -18,10 +58,8 @@ class DrinksPage extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
-            // خطأ على مستوى الستريم
             final e = snap.error!;
             logError(e, snap.stackTrace);
-            // ديالوج بنص قابل للنسخ
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) showErrorDialog(context, e, snap.stackTrace);
             });
@@ -35,15 +73,14 @@ class DrinksPage extends StatelessWidget {
           try {
             items = snap.data!.docs.map((doc) {
               final data = doc.data();
-              // تأكد إن الحقول الأساسية موجودة وأنواعها سليمة
               final name = (data['name'] ?? '').toString();
               final image = (data['image'] ?? 'assets/drinks.jpg').toString();
-
-              // دي حقول اختيارية لكن هنحافظ على الأنواع
               final unit = (data['unit'] ?? 'cup').toString();
-              final sellPrice = (data['sellPrice'] ?? 0).toDouble();
+              final sellPrice = (data['sellPrice'] is num)
+                  ? (data['sellPrice'] as num).toDouble()
+                  : double.tryParse((data['sellPrice'] ?? '0').toString()) ??
+                        0.0;
 
-              // مهم: لو عندك roastLevels أو consumesByRoast / consumes، سيبهم زي ما هم (الديالوج بيتعامل)
               return _DrinkItem(
                 id: doc.id,
                 name: name,
@@ -59,7 +96,6 @@ class DrinksPage extends StatelessWidget {
             return const Center(child: Text('تعذر قراءة بيانات المشروبات'));
           }
 
-          // نفس شكل الكروت: صورة خلفية داكنة + اسم كبير
           return LayoutBuilder(
             builder: (context, c) {
               final max = c.maxWidth;
@@ -70,7 +106,7 @@ class DrinksPage extends StatelessWidget {
                   : max >= 600
                   ? 2
                   : 1;
-              final spacing = 16.0;
+              const spacing = 16.0;
 
               return GridView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
@@ -137,8 +173,8 @@ class _DrinkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      elevation: 6,
-      borderRadius: BorderRadius.circular(16),
+      elevation: 8,
+      borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -146,30 +182,46 @@ class _DrinkCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Image.asset(image, fit: BoxFit.cover),
+            // طبقة تغميق خفيفة
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.20),
-                    Colors.black.withOpacity(0.60),
+                    Colors.black.withOpacity(0.25),
+                    Colors.black.withOpacity(0.55),
                   ],
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Align(
-                alignment: Alignment.bottomCenter,
+            // الاسم في "نص" الكارت بخلفية شفافة خفيفة
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                ),
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 22,
+                    fontSize: 30,
                     fontWeight: FontWeight.w800,
                     height: 1.2,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 6,
+                        color: Colors.black45,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
                   ),
                 ),
               ),

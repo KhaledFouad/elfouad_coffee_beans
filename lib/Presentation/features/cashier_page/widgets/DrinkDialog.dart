@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 
+enum Serving { single, dbl }
+
 class DrinkDialog extends StatefulWidget {
   final String drinkId;
   final Map<String, dynamic> drinkData;
@@ -26,37 +28,68 @@ class _DrinkDialogState extends State<DrinkDialog> {
   late final List<String> _roastOptions;
   String? _roast;
 
-  // --------- getters (آمنة) ---------
-  String get _name {
-    final v = widget.drinkData['name'];
-    return v == null ? '' : v.toString();
-  }
+  // Serving (سنجل/دوبل) للتركي/اسبريسو فقط
+  Serving _serving = Serving.single;
 
-  String get _image {
-    final v = widget.drinkData['image'];
-    return v == null ? 'assets/drinks.jpg' : v.toString();
-  }
+  // Complimentary (ضيافة)
+  bool _isComplimentary = false;
 
-  String get _unit {
-    final v = widget.drinkData['unit'];
-    return v == null ? 'cup' : v.toString();
-  }
+  // --------- getters آمنة ---------
+  String get _name => (widget.drinkData['name'] ?? '').toString();
 
-  double get _sellPricePerUnit {
+  String get _image =>
+      (widget.drinkData['image'] ?? 'assets/drinks.jpg').toString();
+
+  String get _unit => (widget.drinkData['unit'] ?? 'cup').toString();
+
+  double get _sellPriceBase {
     final v = widget.drinkData['sellPrice'];
-    if (v == null) return 0.0;
     if (v is num) return v.toDouble();
-    // لو مكتوبة String
-    return double.tryParse(v.toString()) ?? 0.0;
+    return double.tryParse(v?.toString() ?? '') ?? 0.0;
   }
 
-  double get _total => _sellPricePerUnit * _qty;
+  double get _costPriceSingle {
+    final v = widget.drinkData['costPrice'];
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  }
+
+  double get _doubleCostPrice {
+    final v = widget.drinkData['doubleCostPrice'];
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '') ?? (_costPriceSingle * 2.0);
+  }
+
+  double get _doubleDiscount {
+    final v = widget.drinkData['doubleDiscount'];
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '') ?? 10.0; // default 10
+  }
+
+  bool get _supportsServingChoice =>
+      _name == 'قهوة تركي' || _name == 'قهوة اسبريسو';
+
+  double get _unitPriceEffective {
+    if (_isComplimentary) return 0.0;
+    if (_supportsServingChoice && _serving == Serving.dbl) {
+      return (_sellPriceBase * 2.0) - _doubleDiscount;
+    }
+    return _sellPriceBase;
+  }
+
+  double get _unitCostEffective {
+    if (_supportsServingChoice && _serving == Serving.dbl) {
+      return _doubleCostPrice;
+    }
+    return _costPriceSingle;
+  }
+
+  double get _totalPrice => _unitPriceEffective * _qty;
+  double get _totalCost => _unitCostEffective * _qty;
 
   @override
   void initState() {
     super.initState();
-
-    // نظّف roastLevels لو موجودة
     final rawLevels = widget.drinkData['roastLevels'];
     _roastOptions = (rawLevels is List)
         ? rawLevels
@@ -65,7 +98,6 @@ class _DrinkDialogState extends State<DrinkDialog> {
               .toSet()
               .toList()
         : const <String>[];
-
     _roast = _roastOptions.isNotEmpty ? _roastOptions.first : null;
   }
 
@@ -83,19 +115,36 @@ class _DrinkDialogState extends State<DrinkDialog> {
 
     try {
       final db = FirebaseFirestore.instance;
-      final doc = db.collection('sales').doc();
+      final ref = db.collection('sales').doc();
 
-      await doc.set({
-        'createdAt': DateTime.now().toUtc(),
-        'createdBy': 'cashier_web',
-        'drinkId': widget.drinkId,
+      await ref.set({
+        'type': 'drink', // ← NEW: يحدد النوع بوضوح
+        'created_at': DateTime.now().toUtc(),
+        'created_by': 'cashier_web',
+
+        'drink_id': widget.drinkId,
         'name': _name,
         'unit': _unit,
-        'quantity': _qty.toDouble(),
+        'quantity': _qty, // ← CHANGED: نسجلها int مش double
+
         'roast': _roast ?? '',
-        'sellPrice': _sellPricePerUnit,
-        'sellTotal': _total,
-        // مفيش خصم مخزون ولا تكلفة
+        'serving': _supportsServingChoice
+            ? (_serving == Serving.dbl ? 'double' : 'single')
+            : 'single',
+        'is_complimentary': _isComplimentary,
+
+        // أسعار واضحة
+        'list_price': _sellPriceBase,
+        'unit_price': _unitPriceEffective,
+        'total_price': _totalPrice,
+
+        // تكاليف واضحة
+        'list_cost': _costPriceSingle,
+        'unit_cost': _unitCostEffective,
+        'total_cost': _totalCost,
+
+        // ربح
+        'profit_total': _totalPrice - _totalCost,
       });
 
       if (!mounted) return;
@@ -155,7 +204,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 27,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -194,12 +243,63 @@ class _DrinkDialogState extends State<DrinkDialog> {
                     const SizedBox(height: 12),
                   ],
 
-                  // سعر ثابت + عدد
+                  // سنجل/دوبل للتركي/اسبريسو فقط
+                  if (_supportsServingChoice) ...[
+                    Align(
+                      alignment: Alignment.center,
+                      child: SegmentedButton<Serving>(
+                        segments: const [
+                          ButtonSegment(
+                            value: Serving.single,
+                            label: Text('سنجل'),
+                            icon: Icon(Icons.coffee_outlined),
+                          ),
+                          ButtonSegment(
+                            value: Serving.dbl,
+                            label: Text('دوبل'),
+                            icon: Icon(Icons.coffee),
+                          ),
+                        ],
+                        selected: {_serving},
+                        onSelectionChanged: _busy
+                            ? null
+                            : (s) => setState(() => _serving = s.first),
+                        showSelectedIcon: false,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // ضيافة
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.brown.shade50,
+                      border: Border.all(color: Colors.brown.shade100),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: CheckboxListTile(
+                      value: _isComplimentary,
+                      onChanged: _busy
+                          ? null
+                          : (v) =>
+                                setState(() => _isComplimentary = v ?? false),
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('ضيافة'),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // سعر الكوب الفعلي
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('سعر المنتج'),
-                      Text('${_sellPricePerUnit.toStringAsFixed(2)} جم'),
+                      const Text('سعر الكوب'),
+                      Text('${_unitPriceEffective.toStringAsFixed(2)} جم'),
                     ],
                   ),
 
@@ -231,9 +331,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
                       IconButton.filledTonal(
                         onPressed: _busy
                             ? null
-                            : () {
-                                setState(() => _qty += 1);
-                              },
+                            : () => setState(() => _qty += 1),
                         icon: const Icon(Icons.add),
                       ),
                     ],
@@ -241,7 +339,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
 
                   const SizedBox(height: 12),
 
-                  // إجمالي (اختياري مفيد)
+                  // إجمالي السعر
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.brown.shade50,
@@ -259,7 +357,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
                           'الإجمالي',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        Text(_total.toStringAsFixed(2)),
+                        Text(_totalPrice.toStringAsFixed(2)),
                       ],
                     ),
                   ),

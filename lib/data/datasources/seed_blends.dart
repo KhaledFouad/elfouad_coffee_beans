@@ -14,8 +14,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
     {
@@ -25,8 +25,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
     {
@@ -36,8 +36,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
 
@@ -49,8 +49,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
     {
@@ -60,8 +60,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
     {
@@ -71,8 +71,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
 
@@ -84,8 +84,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
     {
@@ -95,8 +95,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
     {
@@ -106,8 +106,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
 
@@ -119,8 +119,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
     {
@@ -130,8 +130,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
     {
@@ -141,8 +141,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 220,
-      "costPrice": 170,
+      "sellPricePerKg": 220,
+      "costPricePerKg": 170,
       "image": "assets/blends.jpg",
     },
 
@@ -154,8 +154,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 3000,
       "minLevel": 300,
-      "sellPrice": 260,
-      "costPrice": 200,
+      "sellPricePerKg": 260,
+      "costPricePerKg": 200,
       "image": "assets/blends.jpg",
     },
 
@@ -167,8 +167,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
     {
@@ -178,8 +178,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
     {
@@ -189,8 +189,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
     {
@@ -200,8 +200,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
     {
@@ -211,8 +211,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
     {
@@ -222,8 +222,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
     {
@@ -233,8 +233,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
     {
@@ -244,8 +244,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
     {
@@ -255,8 +255,8 @@ Future<void> seedBlends() async {
       "unit": "g",
       "stock": 5000,
       "minLevel": 500,
-      "sellPrice": 200,
-      "costPrice": 150,
+      "sellPricePerKg": 200,
+      "costPricePerKg": 150,
       "image": "assets/blends.jpg",
     },
   ];
@@ -265,6 +265,7 @@ Future<void> seedBlends() async {
     final doc = blends.doc();
     batch.set(doc, {...b, 'createdAt': DateTime.now().toUtc()});
   }
+
   await batch.commit();
   print("✅ Seeded ${allBlends.length} blends");
 }

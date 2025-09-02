@@ -1,3 +1,4 @@
+import 'package:elfouad_coffee_beans/Presentation/features/admin/sales_history_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -43,8 +44,17 @@ class CashierHome extends StatelessWidget {
       // يضمن RTL
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SalesHistoryPage()));
+          },
+          icon: const Icon(Icons.receipt_long),
+          label: const Text('سجلّ المبيعات'),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         backgroundColor: const Color(0xFFF5F5F5),
-        appBar: AppBar(title: const Text('الكاشير'), centerTitle: true),
         body: LayoutBuilder(
           builder: (context, constraints) {
             // عرض المحتوى الأقصى لراحة القراءة على الويب

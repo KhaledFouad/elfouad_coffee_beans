@@ -157,7 +157,7 @@ class _CoffeeBeansBackgroundState extends State<_CoffeeBeansBackground>
   @override
   void initState() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await diagnoseInventory();
+      // await diagnoseInventory();
     });
     super.initState();
     _controller = AnimationController(

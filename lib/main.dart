@@ -1,5 +1,7 @@
 // lib/main.dart
 import 'dart:async';
+import 'dart:ui' as ui; // ← علشان ui.PlatformDispatcher
+import 'package:elfouad_coffee_beans/data/datasources/seed_blends.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -12,7 +14,6 @@ import 'Presentation/splash screen/splash_screen.dart';
 import 'core/services/firebase_options.dart';
 
 Future<void> main() async {
-  // شغّل كل حاجة في نفس الـ Zone علشان مايحصلش Zone mismatch
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
@@ -25,16 +26,27 @@ Future<void> main() async {
       };
 
       // لوج لأي أخطاء async غير ممسوكة (Timers/Futures…)
-      PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-        debugPrint('⚠️ Uncaught async error: $error');
-        debugPrint(stack.toString());
-        return true; // مايقفلش الأب
-      };
+      ui.PlatformDispatcher.instance.onError =
+          (Object error, StackTrace stack) {
+            debugPrint('⚠️ Uncaught async error: $error');
+            debugPrint(stack.toString());
+            return true; // مايقفلش الأب
+          };
 
-      // تهيئة Firebase مرة واحدة هنا فقط
+      // ✅ هيّئ Firebase الأول
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+
+      // if (kDebugMode) {
+      //   try {
+      //     // await clearDrinks(); // لو عايز تفضّي القديم (اختياري)
+      //     await seedBlends();
+      //   } catch (e, st) {
+      //     debugPrint('❌ seeding failed: $e');
+      //     debugPrint(st.toString());
+      //   }
+      // }
 
       runApp(
         MultiProvider(
@@ -62,8 +74,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home:
-          SplashScreen(), // تأكد إن SplashScreen مفيهوش Firebase.initializeApp تاني
+      home: SplashScreen(), // تأكد إن SplashScreen مفيهوش initializeApp تاني
     );
   }
 }

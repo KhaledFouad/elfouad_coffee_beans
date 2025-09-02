@@ -1,26 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/blends_models.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 
-class SingleDialog extends StatefulWidget {
-  final SingleGroup group;
-
-  const SingleDialog({super.key, required this.group});
+class BlendDialog extends StatefulWidget {
+  final BlendGroup group;
+  const BlendDialog({super.key, required this.group});
 
   @override
-  State<SingleDialog> createState() => _SingleDialogState();
+  State<BlendDialog> createState() => _BlendDialogState();
 }
 
-class _SingleDialogState extends State<SingleDialog> {
+class _BlendDialogState extends State<BlendDialog> {
   bool _busy = false;
   String? _fatal;
 
-  // roast (variant)
-  late final List<String> _roastOptions;
-  String? _roast;
+  late final List<String> _variantOptions; // بدون الفارغ
+  String? _variant; // null يعني مفيش درجات
 
-  // كمية بالجرام (TextField)
   final TextEditingController _gramsCtrl = TextEditingController();
   int get _grams {
     final s = _gramsCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
@@ -28,29 +25,38 @@ class _SingleDialogState extends State<SingleDialog> {
     return v.clamp(0, 1000000);
   }
 
-  // ضيافة
   bool _isComplimentary = false;
 
   @override
   void initState() {
     super.initState();
-    _roastOptions =
+
+    // جهّز اختيارات التحميص: استبعد الفارغ ""
+    _variantOptions =
         widget.group.variants.keys
             .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
             .toSet()
             .toList()
-          ..sort((a, b) {
-            if (a.isEmpty && b.isEmpty) return 0;
-            if (a.isEmpty) return 1;
-            if (b.isEmpty) return -1;
-            return a.compareTo(b);
-          });
-    _roast = _roastOptions.isNotEmpty ? _roastOptions.first : null;
+          ..sort();
+
+    // لو فيه درجات فعلاً: خُد أول واحدة. لو مفيش: سيبها null
+    _variant = _variantOptions.isNotEmpty ? _variantOptions.first : null;
   }
 
-  SingleVariant? get _selected {
-    final key = _roast ?? '';
-    return widget.group.variants[key];
+  // اختَر الـ variant المختار؛ ولو مفيش درجات خالص، استخدم المفتاح الفارغ "" لو موجود
+  BlendVariant? get _selected {
+    if (_variant != null) {
+      return widget.group.variants[_variant!];
+    }
+    // مفيش درجات: جرّب مفتاح فاضي "", أو لو فيه عنصر واحد خُده
+    if (widget.group.variants.containsKey('')) {
+      return widget.group.variants[''];
+    }
+    if (widget.group.variants.length == 1) {
+      return widget.group.variants.values.first;
+    }
+    return null;
   }
 
   double get _sellPerKg => _selected?.sellPricePerKg ?? 0.0;
@@ -67,7 +73,7 @@ class _SingleDialogState extends State<SingleDialog> {
   Future<void> _commitSale() async {
     final sel = _selected;
     if (sel == null) {
-      setState(() => _fatal = 'اختر درجة التحميص.');
+      setState(() => _fatal = 'لم يتم تحديد الصنف/التحميص.');
       await showErrorDialog(context, _fatal!);
       return;
     }
@@ -83,12 +89,12 @@ class _SingleDialogState extends State<SingleDialog> {
     });
 
     final db = FirebaseFirestore.instance;
-    final itemRef = db.collection('singles').doc(sel.id);
+    final itemRef = db.collection('blends').doc(sel.id);
 
     try {
       await db.runTransaction((txn) async {
         final snap = await txn.get(itemRef);
-        if (!snap.exists) throw Exception('العنصر غير موجود بالمخزون.');
+        if (!snap.exists) throw Exception('التوليفة غير موجودة بالمخزون.');
 
         final data = snap.data() as Map<String, dynamic>;
         final currentStock = (data['stock'] is num)
@@ -108,10 +114,10 @@ class _SingleDialogState extends State<SingleDialog> {
         txn.set(saleRef, {
           'created_at': DateTime.now().toUtc(),
           'created_by': 'cashier_web',
-          'type': 'single',
+          'type': 'ready_blend',
           'item_id': sel.id,
           'name': sel.name,
-          'variant': sel.variant,
+          'variant': sel.variant, // ممكن تبقى "" لو مفيش تحميص
           'unit': 'g',
           'grams': _grams.toDouble(),
           'is_complimentary': _isComplimentary,
@@ -132,7 +138,7 @@ class _SingleDialogState extends State<SingleDialog> {
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تسجيل البيع وخصم المخزون')),
+        const SnackBar(content: Text('تم تسجيل بيع التوليفة وخصم المخزون')),
       );
     } catch (e, st) {
       logError(e, st);
@@ -156,6 +162,7 @@ class _SingleDialogState extends State<SingleDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Header
             ClipRRect(
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(18),
@@ -198,26 +205,28 @@ class _SingleDialogState extends State<SingleDialog> {
               ),
             ),
 
+            // Body
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  if (_roastOptions.isNotEmpty) ...[
+                  // لو فيه درجات فعلًا، اعرضها؛ غير كده، ولا حاجة
+                  if (_variantOptions.isNotEmpty) ...[
                     Align(
                       alignment: Alignment.centerRight,
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: _roastOptions.map((r) {
-                          final selected = (_roast ?? '') == r;
+                        children: _variantOptions.map((r) {
+                          final selected = (_variant ?? '') == r;
                           return ChoiceChip(
-                            label: Text(r.isEmpty ? 'بدون' : r),
+                            label: Text(r),
                             selected: selected,
                             onSelected: _busy
                                 ? null
                                 : (v) {
                                     if (!v) return;
-                                    setState(() => _roast = r);
+                                    setState(() => _variant = r);
                                   },
                           );
                         }).toList(),
@@ -226,6 +235,7 @@ class _SingleDialogState extends State<SingleDialog> {
                     const SizedBox(height: 12),
                   ],
 
+                  // ضيافة
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.brown.shade50,
@@ -243,11 +253,19 @@ class _SingleDialogState extends State<SingleDialog> {
                         horizontal: 12,
                       ),
                       controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text('ضيافة'),
+                      title: const Text(
+                        'ضيافة',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
+
                   const SizedBox(height: 12),
 
+                  // إدخال الكمية بالجرامات
                   Align(
                     alignment: Alignment.centerRight,
                     child: Row(
@@ -276,9 +294,11 @@ class _SingleDialogState extends State<SingleDialog> {
                   ),
 
                   const SizedBox(height: 12),
+
                   _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
                   _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
                   const SizedBox(height: 8),
+
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.brown.shade50,
