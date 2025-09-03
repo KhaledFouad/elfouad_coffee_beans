@@ -1,10 +1,14 @@
 // lib/main.dart
 import 'dart:async';
 import 'dart:ui' as ui; // ← علشان ui.PlatformDispatcher
-import 'package:elfouad_coffee_beans/data/datasources/seed_blends.dart';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'
+    show
+        GlobalMaterialLocalizations,
+        GlobalWidgetsLocalizations,
+        GlobalCupertinoLocalizations;
 import 'package:provider/provider.dart';
 
 import 'Presentation/features/cashier_page/data/cashier_datasource.dart';
@@ -41,7 +45,7 @@ Future<void> main() async {
       // if (kDebugMode) {
       //   try {
       //     // await clearDrinks(); // لو عايز تفضّي القديم (اختياري)
-      //     await seedBlends();
+      //     await seedDrinksFixed();
       //   } catch (e, st) {
       //     debugPrint('❌ seeding failed: $e');
       //     debugPrint(st.toString());
@@ -73,6 +77,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
+      supportedLocales: const [Locale('ar'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       debugShowCheckedModeBanner: false,
       home: SplashScreen(), // تأكد إن SplashScreen مفيهوش initializeApp تاني
     );

@@ -160,7 +160,6 @@ class _SingleCard extends StatelessWidget {
   final String image;
   final VoidCallback onTap;
   const _SingleCard({
-    super.key,
     required this.title,
     required this.image,
     required this.onTap,

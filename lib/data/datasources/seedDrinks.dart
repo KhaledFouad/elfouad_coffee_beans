@@ -32,6 +32,28 @@ Future<void> seedDrinksFixed() async {
       'roastLevels': <String>[],
     },
     {
+      "name": "كوفي ميكس",
+      "unit": "cup",
+      "sellPrice": 15.0, // الافتراضي (مياه)
+      "costPrice": 6.0, // لو عندك تكلفة حطها
+      "image": "assets/drinks.jpg",
+      "roastLevels": <String>[],
+      "mixOptions": {
+        // هنستعملها في الديالوج
+        "waterPrice": 15.0,
+        "milkPrice": 25.0,
+      },
+    },
+    {
+      "name": "شاي",
+      "unit": "cup",
+      "sellPrice": 7.0, // الافتراضي (مياه)
+      "costPrice": 3.0, // لو عندك تكلفة حطها
+      "image": "assets/drinks.jpg",
+      "roastLevels": <String>[],
+    },
+
+    {
       'name': 'قهوة فرنساوي',
       'unit': 'cup',
       'sellPrice': 25.0,

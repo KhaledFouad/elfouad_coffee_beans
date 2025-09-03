@@ -3,6 +3,14 @@ import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmode
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 
+/// استثناء ودّي لرسائل واضحة للمستخدم
+class UserFriendly implements Exception {
+  final String message;
+  UserFriendly(this.message);
+  @override
+  String toString() => message;
+}
+
 class SingleDialog extends StatefulWidget {
   final SingleGroup group;
 
@@ -30,6 +38,9 @@ class _SingleDialogState extends State<SingleDialog> {
 
   // ضيافة
   bool _isComplimentary = false;
+
+  // محوّج
+  bool _isSpiced = false;
 
   @override
   void initState() {
@@ -59,10 +70,32 @@ class _SingleDialogState extends State<SingleDialog> {
   double get _sellPerG => _sellPerKg / 1000.0;
   double get _costPerG => _costPerKg / 1000.0;
 
-  double get _pricePerG => _isComplimentary ? 0.0 : _sellPerG;
+  double get _beansAmount => _sellPerG * _grams;
 
-  double get _totalPrice => _pricePerG * _grams;
-  double get _totalCost => _costPerG * _grams;
+  // === قواعد التحويج للأصناف المنفردة ===
+  double _spiceRatePerKgForSingle(String name) {
+    final n = name.trim();
+    if (n.contains('كولومبي')) return 80;
+    if (n.contains('برازيلي')) return 60;
+    if (n.contains('حبشي')) return 60;
+    if (n.contains('هندي')) return 60;
+    return 40;
+  }
+
+  double get _spiceRatePerKg {
+    final sel = _selected;
+    if (!_isSpiced || sel == null) return 0.0;
+    return _spiceRatePerKgForSingle(sel.name);
+  }
+
+  double get _spiceAmount =>
+      _isSpiced ? (_grams / 1000.0) * _spiceRatePerKg : 0.0;
+
+  double get _pricePerG =>
+      _isComplimentary ? 0.0 : _sellPerG; // سعر البن/جرام للعرض فقط
+  double get _totalPrice =>
+      _isComplimentary ? 0.0 : (_beansAmount + _spiceAmount);
+  double get _totalCost => _costPerG * _grams; // تكلفة البن فقط
 
   Future<void> _commitSale() async {
     final sel = _selected;
@@ -88,20 +121,23 @@ class _SingleDialogState extends State<SingleDialog> {
     try {
       await db.runTransaction((txn) async {
         final snap = await txn.get(itemRef);
-        if (!snap.exists) throw Exception('العنصر غير موجود بالمخزون.');
+        if (!snap.exists) throw UserFriendly('العنصر غير موجود بالمخزون.');
 
         final data = snap.data() as Map<String, dynamic>;
         final currentStock = (data['stock'] is num)
             ? (data['stock'] as num).toDouble()
             : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
 
-        if (currentStock < _grams) {
-          throw Exception(
-            'المخزون غير كافٍ. المتاح: ${currentStock.toStringAsFixed(0)} جم',
+        final need = _grams.toDouble();
+        if (currentStock < need) {
+          final avail = currentStock.toStringAsFixed(0);
+          final want = need.toStringAsFixed(0);
+          throw UserFriendly(
+            'المخزون غير كافٍ.\nالمتاح: $avail جم • المطلوب: $want جم',
           );
         }
 
-        final newStock = currentStock - _grams;
+        final newStock = currentStock - need;
         txn.update(itemRef, {'stock': newStock});
 
         final saleRef = db.collection('sales').doc();
@@ -113,13 +149,23 @@ class _SingleDialogState extends State<SingleDialog> {
           'name': sel.name,
           'variant': sel.variant,
           'unit': 'g',
-          'grams': _grams.toDouble(),
+          'grams': need,
           'is_complimentary': _isComplimentary,
 
+          // بن
           'price_per_kg': _sellPerKg,
-          'price_per_g': _pricePerG, // 0 لو ضيافة
+          'price_per_g': _pricePerG, // للعرض فقط
+          'beans_amount': _beansAmount,
+
+          // تحويج
+          'is_spiced': _isSpiced,
+          'spice_rate_per_kg': _spiceRatePerKg,
+          'spice_amount': _spiceAmount,
+
+          // إجمالي
           'total_price': _totalPrice,
 
+          // تكاليف
           'cost_per_kg': _costPerKg,
           'cost_per_g': _costPerG,
           'total_cost': _totalCost,
@@ -136,8 +182,25 @@ class _SingleDialogState extends State<SingleDialog> {
       );
     } catch (e, st) {
       logError(e, st);
+      final msg = e is UserFriendly
+          ? e.message
+          : (e is FirebaseException
+                ? 'خطأ في قاعدة البيانات (${e.code})'
+                : 'حدث خطأ غير متوقع.');
       if (!mounted) return;
-      await showErrorDialog(context, e, st);
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('تعذر إتمام العملية'),
+          content: Text(msg),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('حسناً'),
+            ),
+          ],
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -226,6 +289,7 @@ class _SingleDialogState extends State<SingleDialog> {
                     const SizedBox(height: 12),
                   ],
 
+                  // ضيافة
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.brown.shade50,
@@ -243,7 +307,41 @@ class _SingleDialogState extends State<SingleDialog> {
                         horizontal: 12,
                       ),
                       controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text('ضيافة'),
+                      title: const Text(
+                        'ضيافة',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 17,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // محوّج
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.brown.shade50,
+                      border: Border.all(color: Colors.brown.shade100),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: CheckboxListTile(
+                      value: _isSpiced,
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(() => _isSpiced = v ?? false),
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text(
+                        'محوّج',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 17,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -259,7 +357,7 @@ class _SingleDialogState extends State<SingleDialog> {
                             controller: _gramsCtrl,
                             textAlign: TextAlign.center,
                             keyboardType: TextInputType.number,
-                            onChanged: (_) => setState(() {}), // تحديث الإجمالي
+                            onChanged: (_) => setState(() {}),
                             decoration: const InputDecoration(
                               hintText: 'مثال: 250',
                               isDense: true,
@@ -279,6 +377,8 @@ class _SingleDialogState extends State<SingleDialog> {
                   _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
                   _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
                   const SizedBox(height: 8),
+
+                  // الإجمالي (بن + تحويج)
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.brown.shade50,
@@ -294,36 +394,25 @@ class _SingleDialogState extends State<SingleDialog> {
                       children: [
                         const Text(
                           'الإجمالي',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
                         ),
-                        Text(_totalPrice.toStringAsFixed(2)),
+                        Text(
+                          _totalPrice.toStringAsFixed(2),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
                       ],
                     ),
                   ),
 
                   if (_fatal != null) ...[
                     const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange.shade200),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.warning_amber, color: Colors.orange),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _fatal!,
-                              style: const TextStyle(color: Colors.orange),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _WarningBox(text: _fatal!),
                   ],
                 ],
               ),
@@ -337,7 +426,13 @@ class _SingleDialogState extends State<SingleDialog> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _busy ? null : () => Navigator.pop(context),
-                      child: const Text('إلغاء'),
+                      child: const Text(
+                        'إلغاء',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -350,7 +445,13 @@ class _SingleDialogState extends State<SingleDialog> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('تأكيد'),
+                          : const Text(
+                              'تأكيد',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -373,7 +474,7 @@ class _KVRow extends StatelessWidget {
   final String k;
   final double v;
   final String? suffix;
-  const _KVRow({super.key, required this.k, required this.v, this.suffix});
+  const _KVRow({required this.k, required this.v, this.suffix});
 
   @override
   Widget build(BuildContext context) {
@@ -383,6 +484,33 @@ class _KVRow extends StatelessWidget {
         const Spacer(),
         Text('${v.toStringAsFixed(2)}${suffix != null ? ' $suffix' : ''}'),
       ],
+    );
+  }
+}
+
+class _WarningBox extends StatelessWidget {
+  final String text;
+  const _WarningBox({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber, color: Colors.orange),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: const TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
     );
   }
 }

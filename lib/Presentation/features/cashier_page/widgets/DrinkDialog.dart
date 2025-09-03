@@ -1,4 +1,4 @@
-// lib/DrinkDialog.dart
+// lib/Presentation/features/cashier_page/widgets/DrinkDialog.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +33,10 @@ class _DrinkDialogState extends State<DrinkDialog> {
 
   // Complimentary (ضيافة)
   bool _isComplimentary = false;
+
+  // Coffee Mix (مياه/لبن)
+  bool get _isCoffeeMix => _name.trim() == 'كوفي ميكس';
+  String _mix = 'water'; // water | milk
 
   // --------- getters آمنة ---------
   String get _name => (widget.drinkData['name'] ?? '').toString();
@@ -69,8 +73,16 @@ class _DrinkDialogState extends State<DrinkDialog> {
   bool get _supportsServingChoice =>
       _name == 'قهوة تركي' || _name == 'قهوة اسبريسو';
 
+  double get _coffeeMixUnitPrice {
+    final mix = widget.drinkData['mixOptions'] as Map<String, dynamic>?;
+    final water = ((mix?['waterPrice'] ?? 15) as num).toDouble();
+    final milk = ((mix?['milkPrice'] ?? 25) as num).toDouble();
+    return _mix == 'milk' ? milk : water;
+  }
+
   double get _unitPriceEffective {
     if (_isComplimentary) return 0.0;
+    if (_isCoffeeMix) return _coffeeMixUnitPrice;
     if (_supportsServingChoice && _serving == Serving.dbl) {
       return (_sellPriceBase * 2.0) - _doubleDiscount;
     }
@@ -118,32 +130,33 @@ class _DrinkDialogState extends State<DrinkDialog> {
       final ref = db.collection('sales').doc();
 
       await ref.set({
-        'type': 'drink', // ← NEW: يحدد النوع بوضوح
+        'type': 'drink',
         'created_at': DateTime.now().toUtc(),
         'created_by': 'cashier_web',
 
         'drink_id': widget.drinkId,
         'name': _name,
         'unit': _unit,
-        'quantity': _qty, // ← CHANGED: نسجلها int مش double
-
+        'quantity': _qty,
         'roast': _roast ?? '',
         'serving': _supportsServingChoice
             ? (_serving == Serving.dbl ? 'double' : 'single')
             : 'single',
         'is_complimentary': _isComplimentary,
 
-        // أسعار واضحة
+        if (_isCoffeeMix) 'mix_base': _mix,
+        if (_isCoffeeMix) 'mix_unit_price': _coffeeMixUnitPrice,
+
+        // أسعار
         'list_price': _sellPriceBase,
         'unit_price': _unitPriceEffective,
         'total_price': _totalPrice,
 
-        // تكاليف واضحة
+        // تكاليف
         'list_cost': _costPriceSingle,
         'unit_cost': _unitCostEffective,
         'total_cost': _totalCost,
 
-        // ربح
         'profit_total': _totalPrice - _totalCost,
       });
 
@@ -218,7 +231,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Roast selector (لو موجود)
+                  // Roast selector
                   if (_roastOptions.isNotEmpty) ...[
                     Align(
                       alignment: Alignment.centerRight,
@@ -233,8 +246,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
                             onSelected: _busy
                                 ? null
                                 : (v) {
-                                    if (!v) return;
-                                    setState(() => _roast = r);
+                                    if (v) setState(() => _roast = r);
                                   },
                           );
                         }).toList(),
@@ -243,7 +255,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
                     const SizedBox(height: 12),
                   ],
 
-                  // سنجل/دوبل للتركي/اسبريسو فقط
+                  // سنجل/دوبل
                   if (_supportsServingChoice) ...[
                     Align(
                       alignment: Alignment.center,
@@ -270,6 +282,33 @@ class _DrinkDialogState extends State<DrinkDialog> {
                     const SizedBox(height: 12),
                   ],
 
+                  // كوفي ميكس: مياه/لبن
+                  if (_isCoffeeMix) ...[
+                    Align(
+                      alignment: Alignment.center,
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                            value: 'water',
+                            label: Text('مياه'),
+                            icon: Icon(Icons.water_drop_outlined),
+                          ),
+                          ButtonSegment(
+                            value: 'milk',
+                            label: Text('لبن'),
+                            icon: Icon(Icons.local_drink),
+                          ),
+                        ],
+                        selected: {_mix},
+                        onSelectionChanged: _busy
+                            ? null
+                            : (s) => setState(() => _mix = s.first),
+                        showSelectedIcon: false,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
                   // ضيافة
                   Container(
                     decoration: BoxDecoration(
@@ -288,18 +327,36 @@ class _DrinkDialogState extends State<DrinkDialog> {
                         horizontal: 12,
                       ),
                       controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text('ضيافة'),
+                      title: const Text(
+                        'ضيافة',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 17,
+                        ),
+                      ),
                     ),
                   ),
 
                   const SizedBox(height: 12),
 
-                  // سعر الكوب الفعلي
+                  // سعر الكوب
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('سعر الكوب'),
-                      Text('${_unitPriceEffective.toStringAsFixed(2)} جم'),
+                      const Text(
+                        'سعر الكوب',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        '${_unitPriceEffective.toStringAsFixed(2)} جم',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
                     ],
                   ),
 
@@ -313,8 +370,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
                         onPressed: _busy
                             ? null
                             : () {
-                                if (_qty <= 1) return;
-                                setState(() => _qty -= 1);
+                                if (_qty > 1) setState(() => _qty -= 1);
                               },
                         icon: const Icon(Icons.remove),
                       ),
@@ -355,9 +411,18 @@ class _DrinkDialogState extends State<DrinkDialog> {
                       children: [
                         const Text(
                           'الإجمالي',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
                         ),
-                        Text(_totalPrice.toStringAsFixed(2)),
+                        Text(
+                          _totalPrice.toStringAsFixed(2),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -398,7 +463,13 @@ class _DrinkDialogState extends State<DrinkDialog> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _busy ? null : () => Navigator.pop(context),
-                      child: const Text('إلغاء'),
+                      child: const Text(
+                        'إلغاء',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -411,7 +482,13 @@ class _DrinkDialogState extends State<DrinkDialog> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('تأكيد'),
+                          : const Text(
+                              'تأكيد',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
                     ),
                   ),
                 ],

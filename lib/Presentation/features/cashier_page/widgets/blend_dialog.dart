@@ -3,6 +3,13 @@ import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmode
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 
+class UserFriendly implements Exception {
+  final String message;
+  UserFriendly(this.message);
+  @override
+  String toString() => message;
+}
+
 class BlendDialog extends StatefulWidget {
   final BlendGroup group;
   const BlendDialog({super.key, required this.group});
@@ -15,6 +22,16 @@ class _BlendDialogState extends State<BlendDialog> {
   bool _busy = false;
   String? _fatal;
 
+  // هل يُسمح بالتحويج لهذا الصنف؟
+  bool get _canSpice {
+    final sel = _selected;
+    if (sel == null) return false;
+    final nm = sel.name.trim();
+    if (nm == 'توليفة فرنساوي') return false;
+    if (_flavored.contains(nm)) return false;
+    return true;
+  }
+
   late final List<String> _variantOptions; // بدون الفارغ
   String? _variant; // null يعني مفيش درجات
 
@@ -26,12 +43,23 @@ class _BlendDialogState extends State<BlendDialog> {
   }
 
   bool _isComplimentary = false;
+  bool _isSpiced = false; // محوّج
+
+  // نكهات مستثناة من التحويج + فرنساوي
+  static const Set<String> _flavored = {
+    'قهوة كراميل',
+    'قهوة بندق',
+    'قهوة بندق قطع',
+    'قهوة شوكلت',
+    'قهوة فانيليا',
+    'قهوة توت',
+    'قهوة فراولة',
+    'قهوة مانجو',
+  };
 
   @override
   void initState() {
     super.initState();
-
-    // جهّز اختيارات التحميص: استبعد الفارغ ""
     _variantOptions =
         widget.group.variants.keys
             .map((e) => e.toString().trim())
@@ -40,22 +68,14 @@ class _BlendDialogState extends State<BlendDialog> {
             .toList()
           ..sort();
 
-    // لو فيه درجات فعلاً: خُد أول واحدة. لو مفيش: سيبها null
     _variant = _variantOptions.isNotEmpty ? _variantOptions.first : null;
   }
 
-  // اختَر الـ variant المختار؛ ولو مفيش درجات خالص، استخدم المفتاح الفارغ "" لو موجود
   BlendVariant? get _selected {
-    if (_variant != null) {
-      return widget.group.variants[_variant!];
-    }
-    // مفيش درجات: جرّب مفتاح فاضي "", أو لو فيه عنصر واحد خُده
-    if (widget.group.variants.containsKey('')) {
-      return widget.group.variants[''];
-    }
-    if (widget.group.variants.length == 1) {
+    if (_variant != null) return widget.group.variants[_variant!];
+    if (widget.group.variants.containsKey('')) return widget.group.variants[''];
+    if (widget.group.variants.length == 1)
       return widget.group.variants.values.first;
-    }
     return null;
   }
 
@@ -65,9 +85,24 @@ class _BlendDialogState extends State<BlendDialog> {
   double get _sellPerG => _sellPerKg / 1000.0;
   double get _costPerG => _costPerKg / 1000.0;
 
-  double get _pricePerG => _isComplimentary ? 0.0 : _sellPerG;
+  double get _beansAmount => _sellPerG * _grams;
 
-  double get _totalPrice => _pricePerG * _grams;
+  // 40/كجم للتوليفات الجاهزة (عدا فرنساوي + النكهات)
+  double get _spiceRatePerKg {
+    final sel = _selected;
+    if (!_isSpiced || sel == null) return 0.0;
+    final nm = sel.name.trim();
+    if (nm == 'توليفة فرنساوي') return 0.0;
+    if (_flavored.contains(nm)) return 0.0;
+    return 40.0;
+  }
+
+  double get _spiceAmount =>
+      _isSpiced ? (_grams / 1000.0) * _spiceRatePerKg : 0.0;
+
+  double get _pricePerG => _isComplimentary ? 0.0 : _sellPerG; // للعرض فقط
+  double get _totalPrice =>
+      _isComplimentary ? 0.0 : (_beansAmount + _spiceAmount);
   double get _totalCost => _costPerG * _grams;
 
   Future<void> _commitSale() async {
@@ -94,20 +129,23 @@ class _BlendDialogState extends State<BlendDialog> {
     try {
       await db.runTransaction((txn) async {
         final snap = await txn.get(itemRef);
-        if (!snap.exists) throw Exception('التوليفة غير موجودة بالمخزون.');
+        if (!snap.exists) throw UserFriendly('التوليفة غير موجودة بالمخزون.');
 
         final data = snap.data() as Map<String, dynamic>;
         final currentStock = (data['stock'] is num)
             ? (data['stock'] as num).toDouble()
             : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
 
-        if (currentStock < _grams) {
-          throw Exception(
-            'المخزون غير كافٍ. المتاح: ${currentStock.toStringAsFixed(0)} جم',
+        final need = _grams.toDouble();
+        if (currentStock < need) {
+          final avail = currentStock.toStringAsFixed(0);
+          final want = need.toStringAsFixed(0);
+          throw UserFriendly(
+            'المخزون غير كافٍ.\nالمتاح: $avail جم • المطلوب: $want جم',
           );
         }
 
-        final newStock = currentStock - _grams;
+        final newStock = currentStock - need;
         txn.update(itemRef, {'stock': newStock});
 
         final saleRef = db.collection('sales').doc();
@@ -117,15 +155,25 @@ class _BlendDialogState extends State<BlendDialog> {
           'type': 'ready_blend',
           'item_id': sel.id,
           'name': sel.name,
-          'variant': sel.variant, // ممكن تبقى "" لو مفيش تحميص
+          'variant': sel.variant,
           'unit': 'g',
-          'grams': _grams.toDouble(),
+          'grams': need,
           'is_complimentary': _isComplimentary,
 
+          // بن
           'price_per_kg': _sellPerKg,
-          'price_per_g': _pricePerG, // 0 لو ضيافة
+          'price_per_g': _pricePerG,
+          'beans_amount': _beansAmount,
+
+          // تحويج
+          'is_spiced': _isSpiced,
+          'spice_rate_per_kg': _spiceRatePerKg,
+          'spice_amount': _spiceAmount,
+
+          // إجمالي
           'total_price': _totalPrice,
 
+          // تكاليف
           'cost_per_kg': _costPerKg,
           'cost_per_g': _costPerG,
           'total_cost': _totalCost,
@@ -142,8 +190,25 @@ class _BlendDialogState extends State<BlendDialog> {
       );
     } catch (e, st) {
       logError(e, st);
+      final msg = e is UserFriendly
+          ? e.message
+          : (e is FirebaseException
+                ? 'خطأ في قاعدة البيانات (${e.code})'
+                : 'حدث خطأ غير متوقع.');
       if (!mounted) return;
-      await showErrorDialog(context, e, st);
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('تعذر إتمام العملية'),
+          content: Text(msg),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('حسناً'),
+            ),
+          ],
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -210,7 +275,6 @@ class _BlendDialogState extends State<BlendDialog> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // لو فيه درجات فعلًا، اعرضها؛ غير كده، ولا حاجة
                   if (_variantOptions.isNotEmpty) ...[
                     Align(
                       alignment: Alignment.centerRight,
@@ -226,7 +290,12 @@ class _BlendDialogState extends State<BlendDialog> {
                                 ? null
                                 : (v) {
                                     if (!v) return;
-                                    setState(() => _variant = r);
+                                    setState(() {
+                                      _variant = r;
+                                      if (!_canSpice)
+                                        _isSpiced =
+                                            false; // إلغاء التحويج لو غير مسموح
+                                    });
                                   },
                           );
                         }).toList(),
@@ -256,16 +325,43 @@ class _BlendDialogState extends State<BlendDialog> {
                       title: const Text(
                         'ضيافة',
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 17,
                         ),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+
+                  if (_canSpice)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.brown.shade50,
+                        border: Border.all(color: Colors.brown.shade100),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: CheckboxListTile(
+                        value: _isSpiced,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _isSpiced = v ?? false),
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text(
+                          'محوّج',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 17,
+                          ),
+                        ),
+                      ),
+                    ),
 
                   const SizedBox(height: 12),
 
-                  // إدخال الكمية بالجرامات
                   Align(
                     alignment: Alignment.centerRight,
                     child: Row(
@@ -277,7 +373,7 @@ class _BlendDialogState extends State<BlendDialog> {
                             controller: _gramsCtrl,
                             textAlign: TextAlign.center,
                             keyboardType: TextInputType.number,
-                            onChanged: (_) => setState(() {}), // تحديث الإجمالي
+                            onChanged: (_) => setState(() {}),
                             decoration: const InputDecoration(
                               hintText: 'مثال: 250',
                               isDense: true,
@@ -294,7 +390,6 @@ class _BlendDialogState extends State<BlendDialog> {
                   ),
 
                   const SizedBox(height: 12),
-
                   _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
                   _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
                   const SizedBox(height: 8),
@@ -314,36 +409,25 @@ class _BlendDialogState extends State<BlendDialog> {
                       children: [
                         const Text(
                           'الإجمالي',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
                         ),
-                        Text(_totalPrice.toStringAsFixed(2)),
+                        Text(
+                          _totalPrice.toStringAsFixed(2),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
                       ],
                     ),
                   ),
 
                   if (_fatal != null) ...[
                     const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange.shade200),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.warning_amber, color: Colors.orange),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _fatal!,
-                              style: const TextStyle(color: Colors.orange),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _WarningBox(text: _fatal!),
                   ],
                 ],
               ),
@@ -357,7 +441,13 @@ class _BlendDialogState extends State<BlendDialog> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _busy ? null : () => Navigator.pop(context),
-                      child: const Text('إلغاء'),
+                      child: const Text(
+                        'إلغاء',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -370,7 +460,13 @@ class _BlendDialogState extends State<BlendDialog> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('تأكيد'),
+                          : const Text(
+                              'تأكيد',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -393,7 +489,7 @@ class _KVRow extends StatelessWidget {
   final String k;
   final double v;
   final String? suffix;
-  const _KVRow({super.key, required this.k, required this.v, this.suffix});
+  const _KVRow({required this.k, required this.v, this.suffix});
 
   @override
   Widget build(BuildContext context) {
@@ -403,6 +499,33 @@ class _KVRow extends StatelessWidget {
         const Spacer(),
         Text('${v.toStringAsFixed(2)}${suffix != null ? ' $suffix' : ''}'),
       ],
+    );
+  }
+}
+
+class _WarningBox extends StatelessWidget {
+  final String text;
+  const _WarningBox({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber, color: Colors.orange),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: const TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
     );
   }
 }

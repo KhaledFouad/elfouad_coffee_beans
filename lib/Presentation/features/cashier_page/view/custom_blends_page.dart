@@ -1,14 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-/// ====== موديل صنف منفرد (قد يكون له درجة تحميص) ======
+class UserFriendly implements Exception {
+  final String message;
+  UserFriendly(this.message);
+  @override
+  String toString() => message;
+}
+
+/// ====== موديل صنف منفرد ======
 class SingleVariantItem {
   final String id;
   final String name;
   final String variant; // قد تكون ""
   final String image;
-  final double sellPricePerKg; // Number في Firestore
-  final double costPricePerKg; // Number في Firestore
+  final double sellPricePerKg;
+  final double costPricePerKg;
   final double stock; // جرام
   final String unit; // "g"
 
@@ -47,7 +54,7 @@ class SingleVariantItem {
   }
 }
 
-/// ====== سطر (مكوّن) داخل توليفة العميل ======
+/// ====== سطر داخل توليفة العميل ======
 class _BlendLine {
   SingleVariantItem? item;
   int grams;
@@ -58,15 +65,12 @@ class _BlendLine {
   double get lineCost => (item == null) ? 0 : item!.costPerG * grams;
 }
 
-/// ====== الصفحة الكاملة لتكوين توليفات العميل ======
 class CustomBlendsPage extends StatefulWidget {
   const CustomBlendsPage({super.key});
+  static const String route = '/custom-blends';
 
   @override
   State<CustomBlendsPage> createState() => _CustomBlendsPageState();
-
-  /// لو عايز تعمل Route ثابت
-  static const String route = '/custom-blends';
 }
 
 class _CustomBlendsPageState extends State<CustomBlendsPage> {
@@ -77,6 +81,20 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   final List<_BlendLine> _lines = [_BlendLine()];
 
   bool _isComplimentary = false;
+  bool _isSpiced = false; // 50ج/كجم على إجمالي الوزن
+
+  // ملخصات
+  double get _sumPriceLines =>
+      _lines.fold<double>(0, (s, l) => s + l.linePrice);
+  int get _sumGrams => _lines.fold<int>(0, (s, l) => s + l.grams);
+
+  // سعر التحويج (عرض وبيع فقط)
+  double get _spiceRatePerKg => _isSpiced ? 50.0 : 0.0;
+  double get _spiceAmount =>
+      _isSpiced ? (_sumGrams / 1000.0) * _spiceRatePerKg : 0.0;
+
+  double get _totalPrice =>
+      _isComplimentary ? 0.0 : (_sumPriceLines + _spiceAmount);
 
   @override
   void initState() {
@@ -90,24 +108,13 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           .collection('singles')
           .orderBy('name')
           .get();
-
       setState(() {
         _allSingles = snap.docs.map(SingleVariantItem.fromDoc).toList();
       });
-    } catch (e, st) {
-      debugPrint('❌ load singles: $e\n$st');
+    } catch (e) {
       setState(() => _fatal = 'تعذر تحميل الأصناف المنفردة.');
     }
   }
-
-  // إجماليات
-  double get _totalPrice {
-    final p = _lines.fold<double>(0, (s, l) => s + l.linePrice);
-    return _isComplimentary ? 0.0 : p;
-  }
-
-  double get _totalCost => _lines.fold<double>(0, (s, l) => s + l.lineCost);
-  int get _totalGrams => _lines.fold<int>(0, (s, l) => s + l.grams);
 
   bool get _hasInvalidLine {
     for (final l in _lines) {
@@ -136,99 +143,72 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
     try {
       await db.runTransaction((txn) async {
-        // ===== المرحلة 1: كل القراءات أولاً =====
-        // هنحضر لائحة refs فريدة (لو حد اختار نفس الصنف في أكتر من سطر)
-        final Map<String, SingleVariantItem> itemById = {};
-        final Map<String, int> gramsById =
-            {}; // إجمالي الجرامات المطلوب خصمها لكل doc
+        // إجمالي المطلوب لكل doc (لو متكرر)
+        final Map<String, int> gramsById = {};
+        final Map<String, double> currentStockById = {};
 
         for (final l in _lines) {
           final it = l.item!;
-          itemById[it.id] = it;
           gramsById[it.id] = (gramsById[it.id] ?? 0) + l.grams;
         }
 
-        // نقرأ كل الدوكيمنتس ونشيّك المخزون
-        final Map<String, double> currentStockById = {};
-        for (final entry in itemById.entries) {
-          final it = entry.value;
-          final ref = db.collection('singles').doc(it.id);
-
-          debugPrint(
-            '→ Checking stock for [${it.fullLabel}] id=${it.id}, grams=${gramsById[it.id]}',
-          );
-
+        // تأكيد المخزون برسالة ودّية
+        for (final entry in gramsById.entries) {
+          final id = entry.key;
+          final need = entry.value.toDouble();
+          final ref = db.collection('singles').doc(id);
           final snap = await txn.get(ref);
           if (!snap.exists) {
-            throw StateError(
-              'الصنف "${it.fullLabel}" غير موجود في singles (docId=${it.id}).',
-            );
+            throw UserFriendly('صنف غير موجود (docId=$id).');
           }
           final data = snap.data() as Map<String, dynamic>;
           final cur = (data['stock'] is num)
               ? (data['stock'] as num).toDouble()
               : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
 
-          final need = (gramsById[it.id] ?? 0).toDouble();
           if (cur < need) {
-            throw StateError(
-              'المخزون غير كافٍ لـ "${it.fullLabel}". المتاح: ${cur.toStringAsFixed(0)} جم، المطلوب: ${need.toStringAsFixed(0)} جم',
+            final nm = (data['name'] ?? '').toString();
+            final vr = (data['variant'] ?? '').toString();
+            final label = vr.isNotEmpty ? '$nm - $vr' : nm;
+            throw UserFriendly(
+              'المخزون غير كافٍ لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
             );
           }
-          currentStockById[it.id] = cur;
+          currentStockById[id] = cur;
         }
 
-        // ابنِ components من السطور (مش من الإجماليات) علشان نسجّل كل بند منفصل
-        final List<Map<String, dynamic>> components = [];
-        for (final l in _lines) {
-          final it = l.item!;
-          final grams = l.grams;
-          final pricePerG = _isComplimentary ? 0.0 : it.sellPerG;
-          final costPerG = it.costPerG;
-
-          components.add({
-            'item_id': it.id,
-            'name': it.name,
-            'variant': it.variant, // قد تكون ""
-            'unit': 'g',
-            'grams': grams.toDouble(),
-
-            'price_per_kg': it.sellPricePerKg,
-            'price_per_g': pricePerG,
-            'line_total_price': pricePerG * grams,
-
-            'cost_per_kg': it.costPricePerKg,
-            'cost_per_g': costPerG,
-            'line_total_cost': costPerG * grams,
-          });
-        }
-
-        // نحسب المجاميع
-        final totalPrice = _isComplimentary
-            ? 0.0
-            : _lines.fold<double>(
-                0,
-                (s, l) => s + (l.item!.sellPerG * l.grams),
-              );
-        final totalCost = _lines.fold<double>(
-          0,
-          (s, l) => s + (l.item!.costPerG * l.grams),
-        );
-        final totalGrams = _lines.fold<int>(0, (s, l) => s + l.grams);
-
-        // ===== المرحلة 2: كل الكتابات بعدين =====
-        // خصم المخزون (على مستوى كل doc بحسب الإجمالي)
+        // خصم المخزون
         for (final entry in gramsById.entries) {
           final id = entry.key;
           final need = entry.value.toDouble();
           final cur = currentStockById[id]!;
           final ref = db.collection('singles').doc(id);
-          final newStock = cur - need;
-          txn.update(ref, {'stock': newStock});
-          debugPrint('✓ Update stock: id=$id, $cur → $newStock (−$need g)');
+          txn.update(ref, {'stock': cur - need});
         }
 
-        // إنشاء مستند البيع
+        // تفاصيل السطور (للتسجيل)
+        final components = _lines.map((l) {
+          final it = l.item!;
+          final pricePerG = _isComplimentary ? 0.0 : it.sellPerG;
+          final costPerG = it.costPerG; // لو هتسجل التكلفة مستقبلاً
+          return {
+            'item_id': it.id,
+            'name': it.name,
+            'variant': it.variant,
+            'unit': 'g',
+            'grams': l.grams.toDouble(),
+
+            'price_per_kg': it.sellPricePerKg,
+            'price_per_g': pricePerG,
+            'line_total_price': pricePerG * l.grams,
+
+            'cost_per_kg': it.costPricePerKg,
+            'cost_per_g': costPerG,
+            'line_total_cost': costPerG * l.grams,
+          };
+        }).toList();
+
+        // إنشاء مستند البيع (عرض السعر مفصّل: بن + تحويج)
         final saleRef = db.collection('sales').doc();
         txn.set(saleRef, {
           'created_at': DateTime.now().toUtc(),
@@ -236,10 +216,12 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           'type': 'custom_blend',
           'is_complimentary': _isComplimentary,
 
-          'total_grams': totalGrams.toDouble(),
-          'total_price': totalPrice,
-          'total_cost': totalCost,
-          'profit_total': totalPrice - totalCost,
+          'lines_amount': _sumPriceLines, // سعر البن فقط
+          'is_spiced': _isSpiced,
+          'spice_rate_per_kg': _spiceRatePerKg,
+          'spice_amount': _spiceAmount, // سعر التحويج
+          'total_grams': _sumGrams.toDouble(),
+          'total_price': _totalPrice, // المجموع (بن + تحويج)
 
           'components': components,
         });
@@ -250,21 +232,18 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
         const SnackBar(content: Text('تم تسجيل توليفة العميل وخصم المخزون')),
       );
       Navigator.pop(context);
-    } catch (e, st) {
-      String nice = e.toString();
-      if (e is FirebaseException) {
-        nice =
-            'FirebaseException(code=${e.code}): ${e.message ?? e.toString()}';
-      }
-      debugPrint('❌ commit custom blend FAILED: $nice');
-      debugPrint(st.toString());
-
+    } catch (e) {
+      final msg = e is UserFriendly
+          ? e.message
+          : (e is FirebaseException
+                ? 'خطأ في قاعدة البيانات (${e.code})'
+                : 'حدث خطأ غير متوقع.');
       if (!mounted) return;
       await showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('حدث خطأ'),
-          content: SingleChildScrollView(child: Text(nice)),
+          title: const Text('تعذر إتمام العملية'),
+          content: SingleChildScrollView(child: Text(msg)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -326,7 +305,6 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           ? const Center(child: CircularProgressIndicator())
           : LayoutBuilder(
               builder: (context, c) {
-                // تخطيط مرن: عمودين على الواسع، عمود واحد على الضيق
                 if (isWide) {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,9 +321,14 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                                 : (v) => setState(
                                     () => _isComplimentary = v ?? false,
                                   ),
-                            totalGrams: _totalGrams,
+                            isSpiced: _isSpiced,
+                            onSpicedChanged: _busy
+                                ? null
+                                : (v) => setState(() => _isSpiced = v ?? false),
+                            totalGrams: _sumGrams,
                             totalPrice: _totalPrice,
-                            // totalCost: _totalCost,
+                            beansAmount: _sumPriceLines,
+                            spiceAmount: _spiceAmount,
                           ),
                         ),
                       ),
@@ -365,9 +348,14 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                               : (v) => setState(
                                   () => _isComplimentary = v ?? false,
                                 ),
-                          totalGrams: _totalGrams,
+                          isSpiced: _isSpiced,
+                          onSpicedChanged: _busy
+                              ? null
+                              : (v) => setState(() => _isSpiced = v ?? false),
+                          totalGrams: _sumGrams,
                           totalPrice: _totalPrice,
-                          // totalCost: _totalCost,
+                          beansAmount: _sumPriceLines,
+                          spiceAmount: _spiceAmount,
                         ),
                       ],
                     ),
@@ -416,7 +404,6 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // هيدر بسيط
           Row(
             children: [
               const Text(
@@ -435,7 +422,6 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           ),
           const SizedBox(height: 12),
 
-          // القائمة
           ..._lines.asMap().entries.map((entry) {
             final idx = entry.key;
             final line = entry.value;
@@ -463,7 +449,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   }
 }
 
-/// ====== كارت سطر (Dropdown للصنف + إدخال جرامات + سعر السطر + حذف) ======
+/// ====== كارت سطر ======
 class _LineCard extends StatelessWidget {
   final List<SingleVariantItem> singles;
   final _BlendLine line;
@@ -644,22 +630,29 @@ class _KVBox extends StatelessWidget {
 class _TotalsCard extends StatelessWidget {
   final bool isComplimentary;
   final ValueChanged<bool?>? onComplimentaryChanged;
+  final bool isSpiced;
+  final ValueChanged<bool?>? onSpicedChanged;
   final int totalGrams;
   final double totalPrice;
-  // final double totalCost;
+
+  // عرض الأسعار (مش تكاليف)
+  final double beansAmount; // مجموع أسعار البن
+  final double spiceAmount; // سعر التحويج
 
   const _TotalsCard({
     super.key,
     required this.isComplimentary,
     required this.onComplimentaryChanged,
+    required this.isSpiced,
+    required this.onSpicedChanged,
     required this.totalGrams,
     required this.totalPrice,
-    // required this.totalCost,
+    required this.beansAmount,
+    required this.spiceAmount,
   });
 
   @override
   Widget build(BuildContext context) {
-    // final profit = totalPrice - totalCost;
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -674,14 +667,21 @@ class _TotalsCard extends StatelessWidget {
               controlAffinity: ListTileControlAffinity.leading,
               title: const Text('ضيافة'),
             ),
+            CheckboxListTile(
+              value: isSpiced,
+              onChanged: onSpicedChanged,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('محوّج'),
+            ),
             const SizedBox(height: 8),
+
             _row('إجمالي الجرامات', '$totalGrams جم'),
             const SizedBox(height: 6),
+            _row('سعر البن', beansAmount.toStringAsFixed(2)),
+            _row('سعر التحويج', spiceAmount.toStringAsFixed(2)),
+            const Divider(height: 18),
             _row('الإجمالي', totalPrice.toStringAsFixed(2)),
-            // const SizedBox(height: 6),
-            // _row('التكلفة', totalCost.toStringAsFixed(2)),
-            // const Divider(height: 18),
-            // _row('الربح', profit.toStringAsFixed(2)),
           ],
         ),
       ),

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/cashier_screen.dart';
-import 'package:elfouad_coffee_beans/core/error/diagnose.dart';
 import 'package:flutter/material.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -42,13 +41,13 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(seconds: 5),
     )..repeat(reverse: true);
     _bgAnimation = ColorTween(
-      begin: const Color(0xFF4E342E),
-      end: const Color(0xFF6F4E37),
+      begin: const Color.fromARGB(255, 208, 202, 201),
+      end: const Color.fromARGB(255, 255, 255, 255),
     ).animate(CurvedAnimation(parent: _bgController, curve: Curves.easeInOut));
 
     _logoController.forward();
 
-    _timer = Timer(const Duration(seconds: 3), () {
+    _timer = Timer(const Duration(seconds: 4), () {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 700),
