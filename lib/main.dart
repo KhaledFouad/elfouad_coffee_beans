@@ -2,6 +2,10 @@
 import 'dart:async';
 import 'dart:ui' as ui; // ← علشان ui.PlatformDispatcher
 
+// import 'package:elfouad_coffee_beans/data/datasources/seedDrinks.dart';
+// import 'package:elfouad_coffee_beans/data/datasources/seedProducts.dart';
+// import 'package:elfouad_coffee_beans/data/datasources/seed_blends.dart';
+// import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'
@@ -46,6 +50,8 @@ Future<void> main() async {
       //   try {
       //     // await clearDrinks(); // لو عايز تفضّي القديم (اختياري)
       //     await seedDrinksFixed();
+      //     await seedSingles();
+      //     await seedBlends();
       //   } catch (e, st) {
       //     debugPrint('❌ seeding failed: $e');
       //     debugPrint(st.toString());

@@ -15,9 +15,9 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة تركي',
       'unit': 'cup',
       'sellPrice': 15.0,
-      'costPrice': 5.00,
-      'doubleCostPrice': 9.00, // 👈 تكلفة الدوبل (مختلفة عن 2x أحياناً)
-      'doubleDiscount': 10.0, // 👈 خصم الدوبل على السعر (اختياري، الافتراضي 10)
+      'costPrice': 8.00,
+      'doubleCostPrice': 12.00, // 👈 تكلفة الدوبل (مختلفة عن 2x أحياناً)
+      'doubleDiscount': 5.0, // 👈 خصم الدوبل على السعر (اختياري، الافتراضي 10)
       'image': 'assets/drinks.jpg',
       'roastLevels': ['فاتح', 'وسط', 'غامق'],
     },
@@ -25,8 +25,8 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة اسبريسو',
       'unit': 'cup',
       'sellPrice': 20.0,
-      'costPrice': 6.50,
-      'doubleCostPrice': 12.00, // 👈 تكلفة الدوبل للسبريسو
+      'costPrice': 7.0,
+      'doubleCostPrice': 14.00, // 👈 تكلفة الدوبل للسبريسو
       'doubleDiscount': 10.0, // 👈 خصم الدوبل
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
@@ -35,20 +35,20 @@ Future<void> seedDrinksFixed() async {
       "name": "كوفي ميكس",
       "unit": "cup",
       "sellPrice": 15.0, // الافتراضي (مياه)
-      "costPrice": 6.0, // لو عندك تكلفة حطها
+      "costPrice": 10.0, // لو عندك تكلفة حطها
       "image": "assets/drinks.jpg",
       "roastLevels": <String>[],
       "mixOptions": {
         // هنستعملها في الديالوج
         "waterPrice": 15.0,
-        "milkPrice": 25.0,
+        "milkPrice": 20.0,
       },
     },
     {
       "name": "شاي",
       "unit": "cup",
       "sellPrice": 7.0, // الافتراضي (مياه)
-      "costPrice": 3.0, // لو عندك تكلفة حطها
+      "costPrice": 4.0, // لو عندك تكلفة حطها
       "image": "assets/drinks.jpg",
       "roastLevels": <String>[],
     },
@@ -57,7 +57,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة فرنساوي',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 6.00,
+      'costPrice': 17.00,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },
@@ -65,7 +65,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة بندق',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 7.00,
+      'costPrice': 16.00,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },
@@ -73,7 +73,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة بندق قطع',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 7.50,
+      'costPrice': 17.50,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },
@@ -81,7 +81,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة شوكلت',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 8.00,
+      'costPrice': 16.00,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },
@@ -89,7 +89,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة فانيليا',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 7.50,
+      'costPrice': 16.00,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },
@@ -97,7 +97,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة كراميل',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 7.50,
+      'costPrice': 16.00,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },
@@ -105,7 +105,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة مانجو',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 7.00,
+      'costPrice': 16.00,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },
@@ -113,7 +113,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة توت',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 7.00,
+      'costPrice': 16.00,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },
@@ -121,7 +121,7 @@ Future<void> seedDrinksFixed() async {
       'name': 'قهوة فراولة',
       'unit': 'cup',
       'sellPrice': 25.0,
-      'costPrice': 7.00,
+      'costPrice': 16.00,
       'image': 'assets/drinks.jpg',
       'roastLevels': <String>[],
     },

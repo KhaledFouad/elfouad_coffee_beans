@@ -210,18 +210,30 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
         // إنشاء مستند البيع (عرض السعر مفصّل: بن + تحويج)
         final saleRef = db.collection('sales').doc();
+        final double totalCost = _lines.fold<double>(
+          0.0,
+          (s, l) => s + (l.item!.costPerG * l.grams),
+        );
+
+        // احسب الربح
+        final double totalPrice = _totalPrice; // زي ما بتحسبه (بن + تحويج)
+        final double profit = totalPrice - totalCost;
         txn.set(saleRef, {
           'created_at': DateTime.now().toUtc(),
           'created_by': 'cashier_web',
           'type': 'custom_blend',
           'is_complimentary': _isComplimentary,
 
+          // بن + تحويج (أسعار البيع)
           'lines_amount': _sumPriceLines, // سعر البن فقط
           'is_spiced': _isSpiced,
           'spice_rate_per_kg': _spiceRatePerKg,
           'spice_amount': _spiceAmount, // سعر التحويج
           'total_grams': _sumGrams.toDouble(),
-          'total_price': _totalPrice, // المجموع (بن + تحويج)
+          'total_price': totalPrice, // (بن + تحويج)
+          // تكاليف (مطلوب لحسب الـ rules)
+          'total_cost': totalCost, // لازم رقم >= 0
+          'profit_total': profit,
 
           'components': components,
         });
