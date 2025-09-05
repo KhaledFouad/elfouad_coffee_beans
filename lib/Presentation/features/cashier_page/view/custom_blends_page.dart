@@ -59,7 +59,7 @@ class _BlendLine {
   SingleVariantItem? item;
   int grams;
 
-  _BlendLine({this.item, this.grams = 0});
+  _BlendLine() : grams = 0;
 
   double get linePrice => (item == null) ? 0 : item!.sellPerG * grams;
   double get lineCost => (item == null) ? 0 : item!.costPerG * grams;
@@ -469,7 +469,6 @@ class _LineCard extends StatelessWidget {
   final VoidCallback? onRemove;
 
   const _LineCard({
-    super.key,
     required this.singles,
     required this.line,
     required this.onChanged,
@@ -613,7 +612,7 @@ class _LineCard extends StatelessWidget {
 class _KVBox extends StatelessWidget {
   final String title;
   final double value;
-  const _KVBox({super.key, required this.title, required this.value});
+  const _KVBox({required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -652,7 +651,6 @@ class _TotalsCard extends StatelessWidget {
   final double spiceAmount; // سعر التحويج
 
   const _TotalsCard({
-    super.key,
     required this.isComplimentary,
     required this.onComplimentaryChanged,
     required this.isSpiced,
@@ -713,7 +711,7 @@ class _TotalsCard extends StatelessWidget {
 
 class _WarningBox extends StatelessWidget {
   final String text;
-  const _WarningBox({super.key, required this.text});
+  const _WarningBox({required this.text});
 
   @override
   Widget build(BuildContext context) {

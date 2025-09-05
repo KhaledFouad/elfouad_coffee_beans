@@ -1,11 +1,5 @@
-// lib/main.dart
 import 'dart:async';
-import 'dart:ui' as ui; // ← علشان ui.PlatformDispatcher
-
-// import 'package:elfouad_coffee_beans/data/datasources/seedDrinks.dart';
-// import 'package:elfouad_coffee_beans/data/datasources/seedProducts.dart';
-// import 'package:elfouad_coffee_beans/data/datasources/seed_blends.dart';
-// import 'package:flutter/foundation.dart';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'
@@ -14,7 +8,6 @@ import 'package:flutter_localizations/flutter_localizations.dart'
         GlobalWidgetsLocalizations,
         GlobalCupertinoLocalizations;
 import 'package:provider/provider.dart';
-
 import 'Presentation/features/cashier_page/data/cashier_datasource.dart';
 import 'Presentation/features/cashier_page/domain/cashier_repository.dart';
 import 'Presentation/features/cashier_page/viewmodel/cashier_viewmodel.dart';
@@ -25,7 +18,6 @@ Future<void> main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-
       // لوج أخطاء Flutter (build/layout/rendering)
       FlutterError.onError = (FlutterErrorDetails details) {
         FlutterError.presentError(details);

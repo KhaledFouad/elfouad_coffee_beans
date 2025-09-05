@@ -94,7 +94,7 @@ Future<void> diagnoseInventory() async {
           } else {
             pick = snap.docs.first;
           }
-          blendId = pick!.id;
+          blendId = pick.id;
         }
 
         // اتحقق من الحقول الرقمية

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/blends_models.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class UserFriendly implements Exception {
   final String message;
@@ -9,6 +10,8 @@ class UserFriendly implements Exception {
   @override
   String toString() => message;
 }
+
+enum InputMode { grams, price }
 
 class BlendDialog extends StatefulWidget {
   final BlendGroup group;
@@ -22,24 +25,24 @@ class _BlendDialogState extends State<BlendDialog> {
   bool _busy = false;
   String? _fatal;
 
-  // هل يُسمح بالتحويج لهذا الصنف؟
-  bool get _canSpice {
-    final sel = _selected;
-    if (sel == null) return false;
-    final nm = sel.name.trim();
-    if (nm == 'توليفة فرنساوي') return false;
-    if (_flavored.contains(nm)) return false;
-    return true;
-  }
-
+  // اختيار الدرجة
   late final List<String> _variantOptions; // بدون الفارغ
   String? _variant; // null يعني مفيش درجات
 
+  // إدخال الكمية/السعر
   final TextEditingController _gramsCtrl = TextEditingController();
+  final TextEditingController _priceCtrl = TextEditingController();
+  InputMode _mode = InputMode.grams;
+
   int get _grams {
     final s = _gramsCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
     final v = int.tryParse(s) ?? 0;
     return v.clamp(0, 1000000);
+  }
+
+  double get _inputPrice {
+    final s = _priceCtrl.text.replaceAll(',', '.');
+    return double.tryParse(s) ?? 0.0;
   }
 
   bool _isComplimentary = false;
@@ -56,6 +59,16 @@ class _BlendDialogState extends State<BlendDialog> {
     'قهوة فراولة',
     'قهوة مانجو',
   };
+
+  // هل يُسمح بالتحويج لهذا الصنف؟
+  bool get _canSpice {
+    final sel = _selected;
+    if (sel == null) return false;
+    final nm = sel.name.trim();
+    if (nm == 'توليفة فرنساوي') return false;
+    if (_flavored.contains(nm)) return false;
+    return true;
+  }
 
   @override
   void initState() {
@@ -74,8 +87,9 @@ class _BlendDialogState extends State<BlendDialog> {
   BlendVariant? get _selected {
     if (_variant != null) return widget.group.variants[_variant!];
     if (widget.group.variants.containsKey('')) return widget.group.variants[''];
-    if (widget.group.variants.length == 1)
+    if (widget.group.variants.length == 1) {
       return widget.group.variants.values.first;
+    }
     return null;
   }
 
@@ -84,8 +98,6 @@ class _BlendDialogState extends State<BlendDialog> {
 
   double get _sellPerG => _sellPerKg / 1000.0;
   double get _costPerG => _costPerKg / 1000.0;
-
-  double get _beansAmount => _sellPerG * _grams;
 
   // 40/كجم للتوليفات الجاهزة (عدا فرنساوي + النكهات)
   double get _spiceRatePerKg {
@@ -97,13 +109,26 @@ class _BlendDialogState extends State<BlendDialog> {
     return 40.0;
   }
 
-  double get _spiceAmount =>
-      _isSpiced ? (_grams / 1000.0) * _spiceRatePerKg : 0.0;
+  double get _spicePerG => _spiceRatePerKg / 1000.0;
 
-  double get _pricePerG => _isComplimentary ? 0.0 : _sellPerG; // للعرض فقط
+  // حسابات العرض
+  // في وضع "السعر" بنحوّل السعر->جرامات وبنعرض النتائج
+  int get _gramsEffective {
+    if (_mode == InputMode.grams) return _grams;
+    if (_isComplimentary) return 0; // سعر = 0 -> ما ينفعش تحسب جرامات من سعر
+    final perG = _sellPerG + (_isSpiced ? _spicePerG : 0.0);
+    if (perG <= 0) return 0;
+    final g = (_inputPrice / perG).floor();
+    return g.clamp(0, 1000000);
+  }
+
+  double get _beansAmount => _sellPerG * _gramsEffective;
+  double get _spiceAmount => _isSpiced ? (_gramsEffective * _spicePerG) : 0.0;
+
+  double get _pricePerG => _isComplimentary ? 0.0 : _sellPerG; // عرض فقط
   double get _totalPrice =>
       _isComplimentary ? 0.0 : (_beansAmount + _spiceAmount);
-  double get _totalCost => _costPerG * _grams;
+  double get _totalCost => _costPerG * _gramsEffective;
 
   Future<void> _commitSale() async {
     final sel = _selected;
@@ -112,8 +137,16 @@ class _BlendDialogState extends State<BlendDialog> {
       await showErrorDialog(context, _fatal!);
       return;
     }
-    if (_grams <= 0) {
-      setState(() => _fatal = 'من فضلك أدخل كمية صحيحة بالجرام.');
+
+    final gramsToSell = _gramsEffective;
+    if (gramsToSell <= 0) {
+      setState(
+        () => _fatal = _mode == InputMode.grams
+            ? 'من فضلك أدخل كمية صحيحة بالجرام.'
+            : (_isComplimentary
+                  ? 'لا يمكن إدخال بالسعر مع ضيافة. ألغ الضيافة أو أدخل الجرامات.'
+                  : 'من فضلك أدخل سعرًا صحيحًا.'),
+      );
       await showErrorDialog(context, _fatal!);
       return;
     }
@@ -136,7 +169,7 @@ class _BlendDialogState extends State<BlendDialog> {
             ? (data['stock'] as num).toDouble()
             : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
 
-        final need = _grams.toDouble();
+        final need = gramsToSell.toDouble();
         if (currentStock < need) {
           final avail = currentStock.toStringAsFixed(0);
           final want = need.toStringAsFixed(0);
@@ -184,8 +217,12 @@ class _BlendDialogState extends State<BlendDialog> {
       });
 
       if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+
+      // ارجع للـ Home
+      final nav = Navigator.of(context, rootNavigator: true);
+      nav.pop(); // close dialog
+      nav.pushNamedAndRemoveUntil('/', (r) => false); // غيّر "/" لو الهوم مختلف
+      ScaffoldMessenger.of(nav.context).showSnackBar(
         const SnackBar(content: Text('تم تسجيل بيع التوليفة وخصم المخزون')),
       );
     } catch (e, st) {
@@ -219,260 +256,410 @@ class _BlendDialogState extends State<BlendDialog> {
     final name = widget.group.name;
     final image = widget.group.image;
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(18),
-              ),
-              child: Stack(
-                children: [
-                  Image.asset(
-                    image,
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
+    // منع تغطية الكيبورد
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.zero,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18),
                   ),
-                  Container(
-                    height: 140,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.15),
-                          Colors.black.withOpacity(0.55),
-                        ],
+                  child: Stack(
+                    children: [
+                      Image.asset(
+                        image,
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
                       ),
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: Center(
-                      child: Text(
-                        name,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 27,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Body
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  if (_variantOptions.isNotEmpty) ...[
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _variantOptions.map((r) {
-                          final selected = (_variant ?? '') == r;
-                          return ChoiceChip(
-                            label: Text(r),
-                            selected: selected,
-                            onSelected: _busy
-                                ? null
-                                : (v) {
-                                    if (!v) return;
-                                    setState(() {
-                                      _variant = r;
-                                      if (!_canSpice)
-                                        _isSpiced =
-                                            false; // إلغاء التحويج لو غير مسموح
-                                    });
-                                  },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // ضيافة
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.brown.shade50,
-                      border: Border.all(color: Colors.brown.shade100),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: CheckboxListTile(
-                      value: _isComplimentary,
-                      onChanged: _busy
-                          ? null
-                          : (v) =>
-                                setState(() => _isComplimentary = v ?? false),
-                      dense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                      ),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text(
-                        'ضيافة',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 17,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  if (_canSpice)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.brown.shade50,
-                        border: Border.all(color: Colors.brown.shade100),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: CheckboxListTile(
-                        value: _isSpiced,
-                        onChanged: _busy
-                            ? null
-                            : (v) => setState(() => _isSpiced = v ?? false),
-                        dense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                        ),
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text(
-                          'محوّج',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 17,
+                      Container(
+                        height: 140,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.15),
+                              Colors.black.withOpacity(0.55),
+                            ],
                           ),
                         ),
                       ),
-                    ),
-
-                  const SizedBox(height: 12),
-
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Row(
-                      children: [
-                        const Text('الكمية (جم)'),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _gramsCtrl,
+                      Positioned.fill(
+                        child: Center(
+                          child: Text(
+                            name,
                             textAlign: TextAlign.center,
-                            keyboardType: TextInputType.number,
-                            onChanged: (_) => setState(() {}),
-                            decoration: const InputDecoration(
-                              hintText: 'مثال: 250',
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                vertical: 12,
-                                horizontal: 10,
-                              ),
-                              border: OutlineInputBorder(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 27,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                ),
 
-                  const SizedBox(height: 12),
-                  _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
-                  _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
-                  const SizedBox(height: 8),
+                // Body
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // اختيار الدرجة (أكبر + تعطيل لو مخزونها صفر)
+                      if (_variantOptions.isNotEmpty) ...[
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: _variantOptions.map((r) {
+                              final selected = (_variant ?? '') == r;
+                              final v = widget.group.variants[r];
+                              final stock =
+                                  v?.stock ??
+                                  double
+                                      .infinity; // BlendVariant.stock (لو عندك الحقل)
+                              final disabled = stock <= 0;
 
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.brown.shade50,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.brown.shade100),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'الإجمالي',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
+                              final label = disabled ? '$r (غير متاح)' : r;
+
+                              return ChoiceChip(
+                                label: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (disabled)
+                                      const Icon(Icons.block, size: 16),
+                                    if (disabled) const SizedBox(width: 6),
+                                    Text(
+                                      label,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                selected: selected,
+                                onSelected: _busy || disabled
+                                    ? null
+                                    : (vSel) {
+                                        if (!vSel) return;
+                                        setState(() {
+                                          _variant = r;
+                                          if (!_canSpice) _isSpiced = false;
+                                        });
+                                      },
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                labelPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                side: BorderSide(
+                                  color: disabled
+                                      ? Colors.grey.shade300
+                                      : Colors.brown.shade200,
+                                ),
+                                selectedColor: disabled
+                                    ? Colors.grey.shade200
+                                    : Colors.brown.shade100,
+                                backgroundColor: disabled
+                                    ? Colors.grey.shade100
+                                    : null,
+                              );
+                            }).toList(),
                           ),
                         ),
-                        Text(
-                          _totalPrice.toStringAsFixed(2),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
+                        const SizedBox(height: 12),
                       ],
-                    ),
-                  ),
 
-                  if (_fatal != null) ...[
-                    const SizedBox(height: 10),
-                    _WarningBox(text: _fatal!),
-                  ],
-                ],
-              ),
-            ),
-
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _busy ? null : () => Navigator.pop(context),
-                      child: const Text(
-                        'إلغاء',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                      // ضيافة
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.brown.shade50,
+                          border: Border.all(color: Colors.brown.shade100),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: CheckboxListTile(
+                          value: _isComplimentary,
+                          onChanged: _busy
+                              ? null
+                              : (v) => setState(() {
+                                  _isComplimentary = v ?? false;
+                                  if (_isComplimentary &&
+                                      _mode == InputMode.price) {
+                                    // السعر مع ضيافة غير منطقي -> ارجع لجرامات
+                                    _mode = InputMode.grams;
+                                  }
+                                }),
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text(
+                            'ضيافة',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 17,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _busy ? null : _commitSale,
-                      child: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text(
-                              'تأكيد',
+                      const SizedBox(height: 12),
+
+                      // محوّج (يختفي لو غير مسموح)
+                      if (_canSpice)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.brown.shade50,
+                            border: Border.all(color: Colors.brown.shade100),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: CheckboxListTile(
+                            value: _isSpiced,
+                            onChanged: _busy
+                                ? null
+                                : (v) => setState(() => _isSpiced = v ?? false),
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                            ),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: const Text(
+                              'محوّج',
                               style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 17,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      const SizedBox(height: 12),
+
+                      // اختيار وضع الإدخال: جرامات / سعر
+                      Align(
+                        alignment: Alignment.center,
+                        child: SegmentedButton<InputMode>(
+                          segments: const [
+                            ButtonSegment(
+                              value: InputMode.grams,
+                              label: Text('إدخال بالجرامات'),
+                              icon: Icon(Icons.scale),
+                            ),
+                            ButtonSegment(
+                              value: InputMode.price,
+                              label: Text('إدخال بالسعر'),
+                              icon: Icon(Icons.attach_money),
+                            ),
+                          ],
+                          selected: {_mode},
+                          onSelectionChanged: _busy
+                              ? null
+                              : (s) => setState(
+                                  () => _mode =
+                                      s.first == InputMode.price &&
+                                          _isComplimentary
+                                      ? InputMode.grams
+                                      : s.first,
+                                ),
+                          showSelectedIcon: false,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      if (_mode == InputMode.grams) ...[
+                        // إدخال الجرامات (أرقام فقط)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            children: [
+                              const Text('الكمية (جم)'),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _gramsCtrl,
+                                  textAlign: TextAlign.center,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: const InputDecoration(
+                                    hintText: 'مثال: 250',
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 12,
+                                      horizontal: 10,
+                                    ),
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // إدخال بالسعر (مع حساب الجرامات تلقائيًا)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            children: [
+                              const Text('المبلغ (جم)'),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _priceCtrl,
+                                  enabled: !_isComplimentary,
+                                  textAlign: TextAlign.center,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'^\d+([.,]\d{0,2})?$'),
+                                    ),
+                                  ],
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: const InputDecoration(
+                                    hintText: 'مثال: 120.00',
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 12,
+                                      horizontal: 10,
+                                    ),
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // عرض الجرامات المحسوبة
+                        Row(
+                          children: [
+                            const Text('الجرامات المحسوبة'),
+                            const Spacer(),
+                            Text(
+                              '${_gramsEffective.toString()} جم',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      const SizedBox(height: 12),
+                      _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
+                      _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
+                      const SizedBox(height: 8),
+
+                      // الإجمالي
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.brown.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.brown.shade100),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'الإجمالي',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
+                            Text(
+                              _totalPrice.toStringAsFixed(2),
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
                             ),
-                    ),
+                          ],
+                        ),
+                      ),
+
+                      if (_fatal != null) ...[
+                        const SizedBox(height: 10),
+                        _WarningBox(text: _fatal!),
+                      ],
+                    ],
                   ),
-                ],
-              ),
+                ),
+
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _busy
+                              ? null
+                              : () => Navigator.pop(context),
+                          child: const Text(
+                            'إلغاء',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _busy ? null : _commitSale,
+                          child: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text(
+                                  'تأكيد',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -481,6 +668,7 @@ class _BlendDialogState extends State<BlendDialog> {
   @override
   void dispose() {
     _gramsCtrl.dispose();
+    _priceCtrl.dispose();
     super.dispose();
   }
 }

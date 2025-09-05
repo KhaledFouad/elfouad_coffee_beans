@@ -162,7 +162,6 @@ class _BlendCard extends StatelessWidget {
   final String image;
   final VoidCallback onTap;
   const _BlendCard({
-    super.key,
     required this.title,
     required this.image,
     required this.onTap,
