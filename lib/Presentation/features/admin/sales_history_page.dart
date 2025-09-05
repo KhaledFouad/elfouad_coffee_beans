@@ -10,64 +10,78 @@ class SalesHistoryPage extends StatefulWidget {
 }
 
 class _SalesHistoryPageState extends State<SalesHistoryPage> {
-  DateTimeRange? _range;
+  @override
+  void initState() {
+    super.initState();
+    _range = _todayRange4am();
+  }
 
-  Query<Map<String, dynamic>> _baseQuery() {
-    var q = FirebaseFirestore.instance
-        .collection('sales')
-        .orderBy('created_at', descending: true);
-    if (_range != null) {
-      q = q
-          .where('created_at', isGreaterThanOrEqualTo: _range!.start.toUtc())
-          .where('created_at', isLessThan: _range!.end.toUtc());
+  DateTimeRange? _range;
+  DateTimeRange _todayRange4am() {
+    final now = DateTime.now(); // توقيت الجهاز (محلي)
+    final today4am = DateTime(now.year, now.month, now.day, 4); // 4 الفجر
+
+    late DateTime startLocal;
+    late DateTime endLocal;
+
+    if (now.isBefore(today4am)) {
+      // لسه قبل 4 الفجر → لسه في يوم أمس
+      startLocal = today4am.subtract(const Duration(days: 1));
+      endLocal = today4am;
+    } else {
+      // بعد 4 الفجر → بداية اليوم الحالي
+      startLocal = today4am;
+      endLocal = today4am.add(const Duration(days: 1));
     }
-    return q;
+
+    return DateTimeRange(start: startLocal, end: endLocal);
+  }
+
+  // اليوم التشغيلي ينتهي 4 الفجر: نستخدم إزاحة -4 ساعات في الاستعلام
+  Query<Map<String, dynamic>> _baseQuery() {
+    final r = _range ?? _todayRange4am();
+    return FirebaseFirestore.instance
+        .collection('sales')
+        .where('created_at', isGreaterThanOrEqualTo: r.start.toUtc())
+        .where('created_at', isLessThan: r.end.toUtc()) // end حصري
+        .orderBy('created_at', descending: true)
+    // .limit(500) // اختياري: سقف أقصى يومي
+    ;
   }
 
   Future<void> _pickRange() async {
     final now = DateTime.now();
-    final init =
-        _range ??
-        DateTimeRange(
-          start: DateTime(
-            now.year,
-            now.month,
-            now.day,
-          ).subtract(const Duration(days: 7)),
-          end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
-        );
+    final init = _range ?? _todayRange4am();
 
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(now.year - 2),
       lastDate: DateTime(now.year + 1),
       initialDateRange: init,
-      locale: const Locale(
-        'ar',
-      ), // يشتغل بعد إضافة الـ delegates في MaterialApp
+      locale: const Locale('ar'),
       builder: (context, child) =>
           Directionality(textDirection: TextDirection.rtl, child: child!),
     );
 
     if (picked != null) {
-      setState(
-        () => _range = DateTimeRange(
-          start: DateTime(
-            picked.start.year,
-            picked.start.month,
-            picked.start.day,
-          ),
-          end: DateTime(
-            picked.end.year,
-            picked.end.month,
-            picked.end.day,
-            23,
-            59,
-            59,
-            999,
-          ),
-        ),
+      // نعتبر بداية كل يوم هي 4 ص ونهاية اليوم التالي 4 ص
+      final start = DateTime(
+        picked.start.year,
+        picked.start.month,
+        picked.start.day,
+        4,
       );
+      final endBase = DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day,
+        4,
+      );
+      final end = picked.end == picked.start
+          ? endBase.add(const Duration(days: 1))
+          : endBase.add(const Duration(days: 1)); // نطاق شامل لأيام كاملة
+
+      setState(() => _range = DateTimeRange(start: start, end: end));
     }
   }
 
@@ -145,7 +159,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                 IconButton(
                   tooltip: 'تصفية بالتاريخ',
                   onPressed: _pickRange,
-                  icon: const Icon(Icons.filter_alt),
+                  icon: const Icon(Icons.filter_alt, color: Colors.white),
                 ),
                 if (_range != null)
                   IconButton(
@@ -180,6 +194,10 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               return const Center(child: Text('لا يوجد عمليات بيع'));
             }
 
+            // نحرك الوقت -4 ساعات للتجميع اليومي
+            DateTime _shiftForDay(DateTime t) =>
+                t.subtract(const Duration(hours: 4));
+
             final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
             byDay = {};
             for (final d in docs) {
@@ -188,8 +206,9 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                   (m['created_at'] as Timestamp?)?.toDate() ??
                   DateTime.tryParse(m['created_at']?.toString() ?? '') ??
                   DateTime.fromMillisecondsSinceEpoch(0);
+              final s = _shiftForDay(ts);
               final dayKey =
-                  '${ts.year}-${ts.month.toString().padLeft(2, '0')}-${ts.day.toString().padLeft(2, '0')}';
+                  '${s.year}-${s.month.toString().padLeft(2, '0')}-${s.day.toString().padLeft(2, '0')}';
               byDay.putIfAbsent(dayKey, () => []).add(d);
             }
 
@@ -206,6 +225,37 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               return s;
             }
 
+            int _sumDrinkCups(
+              List<QueryDocumentSnapshot<Map<String, dynamic>>> es,
+            ) {
+              int s = 0;
+              for (final e in es) {
+                final m = e.data();
+                final t = (m['type'] ?? '').toString();
+                if (t == 'drink') {
+                  final q = _num(m['quantity']);
+                  s += (q > 0 ? q.round() : 1);
+                }
+              }
+              return s;
+            }
+
+            double _sumBeansGrams(
+              List<QueryDocumentSnapshot<Map<String, dynamic>>> es,
+            ) {
+              double s = 0;
+              for (final e in es) {
+                final m = e.data();
+                final t = (m['type'] ?? '').toString();
+                if (t == 'single' || t == 'ready_blend') {
+                  s += _num(m['grams']);
+                } else if (t == 'custom_blend') {
+                  s += _num(m['total_grams']);
+                }
+              }
+              return s;
+            }
+
             return ListView.builder(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
               itemCount: dayKeys.length,
@@ -215,6 +265,8 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                 final sumPrice = _sum(entries, 'total_price');
                 final sumCost = _sum(entries, 'total_cost');
                 final sumProfit = sumPrice - sumCost;
+                final cups = _sumDrinkCups(entries);
+                final grams = _sumBeansGrams(entries);
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -224,6 +276,8 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                     sumPrice: sumPrice,
                     sumCost: sumCost,
                     sumProfit: sumProfit,
+                    cups: cups,
+                    grams: grams,
                     onEdit: (doc) => _openEditSheet(doc),
                     onDelete: (doc) => _deleteSale(doc),
                   ),
@@ -241,6 +295,8 @@ class _DaySection extends StatelessWidget {
   final String day;
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> entries;
   final double sumPrice, sumCost, sumProfit;
+  final int cups;
+  final double grams;
   final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onEdit;
   final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onDelete;
 
@@ -250,6 +306,8 @@ class _DaySection extends StatelessWidget {
     required this.sumPrice,
     required this.sumCost,
     required this.sumProfit,
+    required this.cups,
+    required this.grams,
     required this.onEdit,
     required this.onDelete,
   });
@@ -280,6 +338,14 @@ class _DaySection extends StatelessWidget {
                 _pill(Icons.trending_up, 'ربح', sumProfit),
               ],
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _pill(Icons.local_cafe, 'مشروبات', cups.toDouble()),
+                const SizedBox(width: 6),
+                _pill(Icons.scale, 'جرام بن', grams),
+              ],
+            ),
             const Divider(height: 18),
             ...entries.map(
               (e) => _SaleTile(
@@ -295,6 +361,9 @@ class _DaySection extends StatelessWidget {
   }
 
   Widget _pill(IconData icon, String label, double v) {
+    final text = label == 'جرام بن'
+        ? '${v.toStringAsFixed(0)} جم'
+        : v.toStringAsFixed(2);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
@@ -303,11 +372,12 @@ class _DaySection extends StatelessWidget {
         border: Border.all(color: Colors.brown.shade100),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 16),
           const SizedBox(width: 4),
           Text(
-            '$label: ${v.toStringAsFixed(2)}',
+            '$label: $text',
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
@@ -353,9 +423,12 @@ class _SaleTile extends StatelessWidget {
       ),
       title: Row(
         children: [
-          Text(
-            _typeLabel(type),
-            style: const TextStyle(fontWeight: FontWeight.w700),
+          Expanded(
+            child: Text(
+              _titleLine(m, type),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           if (isCompl) ...[
             const SizedBox(width: 6),
@@ -369,30 +442,35 @@ class _SaleTile extends StatelessWidget {
               child: const Text('ضيافة', style: TextStyle(fontSize: 11)),
             ),
           ],
-          const Spacer(),
+          const SizedBox(width: 6),
           Text(
             _fmtTime(createdAt),
             style: const TextStyle(fontSize: 12, color: Colors.black54),
           ),
         ],
       ),
-      subtitle: Row(
+      subtitle: Wrap(
+        spacing: 10,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           _kv('الإجمالي', totalPrice),
-          const SizedBox(width: 10),
           _kv('التكلفة', totalCost),
-          const SizedBox(width: 10),
           _kv('الربح', profit),
-          const Spacer(),
-          IconButton(
-            tooltip: 'تعديل',
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit),
-          ),
-          IconButton(
-            tooltip: 'حذف',
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'تعديل',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit),
+              ),
+              IconButton(
+                tooltip: 'حذف',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
           ),
         ],
       ),
@@ -406,6 +484,40 @@ class _SaleTile extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  static String _titleLine(Map<String, dynamic> m, String type) {
+    String name = (m['name'] ?? '').toString();
+    String variant = (m['variant'] ?? m['roast'] ?? '').toString();
+    String labelNV = variant.isNotEmpty ? '$name $variant' : name;
+
+    switch (type) {
+      case 'drink':
+        final q = _num(m['quantity']) > 0
+            ? _num(m['quantity']).toStringAsFixed(0)
+            : '1';
+        final dn = (m['drink_name'] ?? '').toString();
+        final finalName = labelNV.isNotEmpty
+            ? labelNV
+            : (dn.isNotEmpty ? dn : 'مشروب');
+        return 'مشروب - $q $finalName';
+      case 'single':
+        {
+          final g = _num(m['grams']).toStringAsFixed(0);
+          final lbl = labelNV.isNotEmpty ? labelNV : name;
+          return 'صنف منفرد - $g جم ${lbl.isNotEmpty ? lbl : ''}'.trim();
+        }
+      case 'ready_blend':
+        {
+          final g = _num(m['grams']).toStringAsFixed(0);
+          final lbl = labelNV.isNotEmpty ? labelNV : name;
+          return 'توليفة جاهزة - $g جم ${lbl.isNotEmpty ? lbl : ''}'.trim();
+        }
+      case 'custom_blend':
+        return 'توليفة العميل';
+      default:
+        return 'عملية';
+    }
   }
 
   Widget _kv(String k, double v) {
@@ -458,21 +570,6 @@ class _SaleTile extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _typeLabel(String t) {
-    switch (t) {
-      case 'drink':
-        return 'مشروب';
-      case 'single':
-        return 'صنف منفرد';
-      case 'ready_blend':
-        return 'توليفة جاهزة';
-      case 'custom_blend':
-        return 'توليفة العميل';
-      default:
-        return 'عملية';
-    }
   }
 
   static IconData _iconForType(String t) {
@@ -532,7 +629,6 @@ String _detectType(Map<String, dynamic> m) {
   return 'unknown';
 }
 
-/// نرجّع سطور مكونات حتى لو المستند مفيهوش components:
 /// - drink: سطر واحد بعدد الأكواب
 /// - single / ready_blend: سطر واحد بالجرامات
 /// - custom_blend: نقرأ القائمة كما هي
@@ -668,21 +764,26 @@ class _SaleEditSheetState extends State<_SaleEditSheet> {
     try {
       final updates = <String, dynamic>{};
 
-      // اقرأ القيم الحالية من المستند
-      final type = _type; // drink | single | ready_blend | custom_blend
-      final isCompl = _isComplimentary;
-      final isSpiced = _isSpiced;
+      String type = _type; // drink | single | ready_blend | custom_blend
+      bool isCompl = _isComplimentary;
+      bool isSpiced = _isSpiced;
 
-      // توابع قراءة آمنة
       double numOf(dynamic v) =>
           (v is num) ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0.0;
 
-      // قيم مشتركة (لو موجودة في المستند)
-      final listPrice = numOf(_m['list_price']); // للمشروبات
-      final unitPrice = numOf(_m['unit_price']); // للمشروبات
-      final unitCost = numOf(_m['unit_cost']); // للمشروبات
+      // قيم محفوظة
+      final oldTotalPrice = numOf(_m['total_price']);
+      final oldTotalCost = numOf(_m['total_cost']);
 
-      final pricePerKg = numOf(_m['price_per_kg']); // سنجل/توليفات
+      // مشروبات
+      final listPrice = numOf(_m['list_price']);
+      final unitPrice = numOf(_m['unit_price']);
+      final unitCost = numOf(_m['unit_cost']) > 0
+          ? numOf(_m['unit_cost'])
+          : numOf(_m['list_cost']);
+
+      // أصناف/توليفات بالجرام
+      final pricePerKg = numOf(_m['price_per_kg']);
       final costPerKg = numOf(_m['cost_per_kg']);
       final pricePerG = pricePerKg > 0
           ? pricePerKg / 1000.0
@@ -691,111 +792,145 @@ class _SaleEditSheetState extends State<_SaleEditSheet> {
           ? costPerKg / 1000.0
           : numOf(_m['cost_per_g']);
 
-      final oldTotalCost = numOf(
-        _m['total_cost'],
-      ); // هنحسبه لبعض الأنواع لو نقدر
-
-      // حقول خاصة بالمحوّج (لو موجودة)
+      // توليفة العميل
+      final linesAmount = numOf(_m['lines_amount']);
+      final totalGramsSaved = numOf(_m['total_grams']);
       double spiceRatePerKg = numOf(_m['spice_rate_per_kg']);
-      final totalGrams = numOf(_m['total_grams']); // custom_blend
-      double grams = numOf(_m['grams']); // single/ready_blend
-      double qty = numOf(_m['quantity']); // drink
+      final spiceAmountSaved = numOf(_m['spice_amount']);
 
-      // اقرأ مدخلات المستخدم من الـ UI
-      // ملاحظة: هنُعيد حساب الإجمالي تلقائيًا حسب النوع، حتى لو المستخدم كتب رقم يدوي
-      // تنفيذًا لطلبك إن الحساب يتم تلقائيًا من الخيارات.
+      // مدخلات الفورم
       final uiTotalPrice =
-          double.tryParse(_totalPriceCtrl.text.replaceAll(',', '.')) ?? 0.0;
-      final uiQty =
+          double.tryParse(_totalPriceCtrl.text.replaceAll(',', '.')) ??
+          oldTotalPrice;
+      double qty =
           double.tryParse(_qtyCtrl.text.replaceAll(',', '.')) ??
-          (qty > 0 ? qty : 1.0);
-      final uiGrams =
-          int.tryParse(_gramsCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ??
-          (grams > 0 ? grams.toInt() : 0);
+          numOf(_m['quantity']);
+      double grams =
+          double.tryParse(_gramsCtrl.text.replaceAll(',', '.')) ??
+          numOf(_m['grams']);
 
-      // تحديث أعلام الضيافة/المحوّج
+      // أعلام
       updates['is_complimentary'] = isCompl;
-      if (_m.containsKey('is_spiced')) {
-        updates['is_spiced'] = isSpiced;
-      }
+      if (_m.containsKey('is_spiced')) updates['is_spiced'] = isSpiced;
 
-      double newTotalPrice = uiTotalPrice;
-      double newTotalCost = oldTotalCost; // هنحدثه بالنوع إن أمكن
+      // هل المستخدم غيّر السعر يدويًا؟
+      final bool manualOverride =
+          !isCompl && (uiTotalPrice - oldTotalPrice).abs() > 0.0005;
+
+      double newTotalPrice = oldTotalPrice;
+      double newTotalCost = oldTotalCost;
       double newProfit = 0.0;
 
-      // ===== حسابات حسب النوع =====
       if (type == 'drink') {
-        // عدد الأكواب
-        qty = uiQty <= 0 ? 1 : uiQty;
+        // حنضمن qty على الأقل 1
+        qty = qty <= 0 ? 1 : qty;
         updates['quantity'] = qty;
 
-        // سعر/تكلفة الوحدة: نستخدم الموجود بالمستند
-        // (لو unit_price مش موجود هنرجع لـ list_price)
-        final unitPriceEffective = isCompl
-            ? 0.0
-            : (unitPrice > 0 ? unitPrice : listPrice);
-        final unitCostEffective = unitCost;
-
-        newTotalPrice = isCompl ? 0.0 : (unitPriceEffective * qty);
-        newTotalCost = unitCostEffective * qty;
-
-        // نحافظ على حقول العرض
-        updates['unit_price'] = unitPriceEffective;
-        updates['unit_cost'] = unitCostEffective;
-
-        // إجمالي
-        updates['total_price'] = newTotalPrice;
-        updates['total_cost'] = newTotalCost;
-        newProfit = newTotalPrice - newTotalCost;
-        updates['profit_total'] = newProfit;
-      } else if (type == 'single' || type == 'ready_blend') {
-        // وزن بالجرام
-        grams = uiGrams > 0 ? uiGrams.toDouble() : grams;
-        if (grams <= 0) grams = 0;
-        updates['grams'] = grams;
-
-        // تسعير البن
-        final beansAmount = isCompl ? 0.0 : (pricePerG * grams);
-
-        // تسعير التحويج (لو الحقل موجود في المستند، نستخدمه؛
-        // لو مش موجود وكان النوع single/ready_blend، هنستنتجه)
-        if (_m.containsKey('is_spiced')) {
-          if (isSpiced) {
-            // حدّد سعر/كجم للتحويج لو غير موجود:
-            if (spiceRatePerKg <= 0) {
-              if (type == 'single') {
-                final name = (_m['name'] ?? '').toString();
-                spiceRatePerKg = _spiceRatePerKgForSingle(
-                  name,
-                ); // نفس القواعد السابقة
-              } else {
-                // ready_blend: 40 جنيه / كجم
-                spiceRatePerKg = 40.0;
-              }
-            }
-          } else {
-            // غير محوّج
-            spiceRatePerKg = 0.0;
-          }
-          final spiceAmount = isSpiced
-              ? (grams / 1000.0) * spiceRatePerKg
-              : 0.0;
-
-          updates['spice_rate_per_kg'] = spiceRatePerKg;
-          updates['spice_amount'] = spiceAmount;
-          updates['beans_amount'] = beansAmount;
-
-          newTotalPrice = isCompl ? 0.0 : (beansAmount + spiceAmount);
+        if (isCompl) {
+          newTotalPrice = 0.0;
+          newTotalCost = unitCost * qty;
+          updates['unit_price'] = 0.0;
+          updates['unit_cost'] = unitCost;
+        } else if (manualOverride) {
+          // نوزع السعر على عدد الأكواب
+          final u = (qty > 0) ? (uiTotalPrice / qty) : uiTotalPrice;
+          updates['unit_price'] = u;
+          updates['unit_cost'] = unitCost;
+          newTotalPrice = uiTotalPrice;
+          newTotalCost = unitCost * qty;
+          updates['manual_override'] = true;
+          updates['discount_amount'] =
+              (listPrice * qty) - newTotalPrice; // معلوماتي
         } else {
-          // لا يوجد تحويج لهذا السجل
-          updates['beans_amount'] = beansAmount;
-          newTotalPrice = isCompl ? 0.0 : beansAmount;
+          final unitPriceEffective = unitPrice > 0 ? unitPrice : listPrice;
+          updates['unit_price'] = isCompl ? 0.0 : unitPriceEffective;
+          updates['unit_cost'] = unitCost;
+          newTotalPrice = isCompl ? 0.0 : unitPriceEffective * qty;
+          newTotalCost = unitCost * qty;
         }
 
-        // التكلفة = costPerG * grams (مفيش تكلفة للتحويج)
+        updates['total_price'] = newTotalPrice;
+        updates['total_cost'] = newTotalCost;
+        updates['profit_total'] = newTotalPrice - newTotalCost;
+      } else if (type == 'single' || type == 'ready_blend') {
+        // grams قد يكون صفر لو المستخدم ما دخلوش—نحافظ على القديم لو مفيش إدخال
+        grams = grams > 0 ? grams : numOf(_m['grams']);
+        updates['grams'] = grams;
+
+        // تكلفة البن
         newTotalCost = costPerG * grams;
 
-        // نحافظ على الحقول المشتقة
+        if (isCompl) {
+          newTotalPrice = 0.0;
+          updates['beans_amount'] = 0.0;
+          if (_m.containsKey('spice_amount')) {
+            updates['spice_amount'] = 0.0;
+            updates['spice_rate_per_kg'] = 0.0;
+          }
+        } else if (manualOverride) {
+          // لو محوّج: نخلي سعر التحويج ثابت حسب الحقول الحالية/المنطق،
+          // والباقي يعتبر "سعر البن"
+          double spiceAmount = spiceAmountSaved;
+          if (_m.containsKey('is_spiced')) {
+            // احسب التحويج من جديد فقط لو flag شغال
+            if (isSpiced) {
+              if (spiceRatePerKg <= 0) {
+                // قواعد التحويج الافتراضية:
+                if (type == 'single') {
+                  final name = (_m['name'] ?? '').toString();
+                  spiceRatePerKg = _spiceRatePerKgForSingle(name);
+                } else {
+                  spiceRatePerKg = 40.0; // جاهزة
+                }
+              }
+              spiceAmount = (grams / 1000.0) * spiceRatePerKg;
+            } else {
+              spiceAmount = 0.0;
+              spiceRatePerKg = 0.0;
+            }
+            updates['spice_rate_per_kg'] = spiceRatePerKg;
+            updates['spice_amount'] = spiceAmount;
+          }
+
+          final beansAmount = (uiTotalPrice - spiceAmount).clamp(
+            0.0,
+            double.infinity,
+          );
+          updates['beans_amount'] = beansAmount;
+
+          // حفظ السعر الجديد + خصم معلوماتي اختياري
+          newTotalPrice = uiTotalPrice;
+          final autoPrice =
+              (pricePerG * grams) +
+              (isSpiced ? ((grams / 1000.0) * spiceRatePerKg) : 0.0);
+          updates['manual_override'] = true;
+          updates['discount_amount'] = (autoPrice - newTotalPrice);
+        } else {
+          // التسعير التلقائي
+          final beansAmount = pricePerG * grams;
+          double spiceAmount = 0.0;
+          if (_m.containsKey('is_spiced')) {
+            if (isSpiced) {
+              if (spiceRatePerKg <= 0) {
+                if (type == 'single') {
+                  final name = (_m['name'] ?? '').toString();
+                  spiceRatePerKg = _spiceRatePerKgForSingle(name);
+                } else {
+                  spiceRatePerKg = 40.0;
+                }
+              }
+              spiceAmount = (grams / 1000.0) * spiceRatePerKg;
+            } else {
+              spiceRatePerKg = 0.0;
+            }
+            updates['spice_rate_per_kg'] = spiceRatePerKg;
+            updates['spice_amount'] = spiceAmount;
+          }
+          updates['beans_amount'] = beansAmount;
+          newTotalPrice = beansAmount + spiceAmount;
+        }
+
+        // ثوابت عرض/مرجعية
         updates['price_per_kg'] = pricePerKg;
         updates['price_per_g'] = pricePerG;
         updates['cost_per_kg'] = costPerKg;
@@ -803,39 +938,48 @@ class _SaleEditSheetState extends State<_SaleEditSheet> {
 
         updates['total_price'] = newTotalPrice;
         updates['total_cost'] = newTotalCost;
-        newProfit = newTotalPrice - newTotalCost;
-        updates['profit_total'] = newProfit;
+        updates['profit_total'] = newTotalPrice - newTotalCost;
       } else if (type == 'custom_blend') {
-        // لتوليفة العميل: بنستخدم lines_amount (سعر البن) + تحويج حسب الوزن الكلي
-        final linesAmount = numOf(_m['lines_amount']); // سعر البن من السطور
-        final gramsAll = totalGrams > 0 ? totalGrams : numOf(_m['total_grams']);
+        final gramsAll = totalGramsSaved > 0
+            ? totalGramsSaved
+            : numOf(_m['total_grams']);
 
+        double spiceAmount = spiceAmountSaved;
         if (_m.containsKey('is_spiced')) {
-          // لو محوّج هنا السعر 50ج/كجم بحسب متطلباتك السابقة
-          spiceRatePerKg = isSpiced ? 50.0 : 0.0;
-          final spiceAmount = isSpiced
-              ? (gramsAll / 1000.0) * spiceRatePerKg
-              : 0.0;
-
+          if (isSpiced) {
+            spiceRatePerKg = spiceRatePerKg > 0 ? spiceRatePerKg : 50.0;
+            spiceAmount = (gramsAll / 1000.0) * spiceRatePerKg;
+          } else {
+            spiceRatePerKg = 0.0;
+            spiceAmount = 0.0;
+          }
           updates['spice_rate_per_kg'] = spiceRatePerKg;
           updates['spice_amount'] = spiceAmount;
-
-          newTotalPrice = isCompl ? 0.0 : (linesAmount + spiceAmount);
-        } else {
-          newTotalPrice = isCompl ? 0.0 : linesAmount;
         }
 
-        // التكلفة الإجمالية محفوظة مسبقًا (total_cost) = مجموع تكاليف البن من السطور
-        newTotalCost = numOf(_m['total_cost']);
+        final autoPrice = linesAmount + spiceAmount;
 
-        // نحافظ على الإجماليات
+        if (isCompl) {
+          newTotalPrice = 0.0;
+        } else if (manualOverride) {
+          newTotalPrice = uiTotalPrice;
+          updates['manual_override'] = true;
+          updates['discount_amount'] = (autoPrice - newTotalPrice);
+        } else {
+          newTotalPrice = autoPrice;
+        }
+
+        newTotalCost = numOf(_m['total_cost']); // مجموع تكاليف البن من السطور
         updates['total_price'] = newTotalPrice;
+        updates['total_cost'] = newTotalCost;
         updates['profit_total'] = newTotalPrice - newTotalCost;
       } else {
-        // أنواع غير معروفة: على الأقل طبّق ضيافة على السعر الإجمالي
+        // أنواع غير معروفة: التزم بالسعر المدخل أو صفر لو ضيافة
         newTotalPrice = isCompl ? 0.0 : uiTotalPrice;
         updates['total_price'] = newTotalPrice;
+        updates['total_cost'] = oldTotalCost;
         updates['profit_total'] = newTotalPrice - oldTotalCost;
+        updates['manual_override'] = true;
       }
 
       await widget.snap.reference.update(updates);
@@ -844,7 +988,7 @@ class _SaleEditSheetState extends State<_SaleEditSheet> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('تم حفظ التعديلات وتحديث الإجماليات تلقائيًا'),
+          content: Text('تم حفظ التعديلات (تطبيق سعرك اليدوي عند إدخاله)'),
         ),
       );
     } catch (e) {
