@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/cashier_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'
@@ -11,7 +12,7 @@ import 'package:provider/provider.dart';
 import 'Presentation/features/cashier_page/data/cashier_datasource.dart';
 import 'Presentation/features/cashier_page/domain/cashier_repository.dart';
 import 'Presentation/features/cashier_page/viewmodel/cashier_viewmodel.dart';
-import 'Presentation/splash screen/splash_screen.dart';
+// import 'Presentation/splash screen/splash_screen.dart';
 import 'core/services/firebase_options.dart';
 
 Future<void> main() async {
@@ -82,7 +83,7 @@ class MyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       debugShowCheckedModeBanner: false,
-      home: SplashScreen(), // تأكد إن SplashScreen مفيهوش initializeApp تاني
+      home: CashierHome(), // تأكد إن SplashScreen مفيهوش initializeApp تاني
     );
   }
 }
