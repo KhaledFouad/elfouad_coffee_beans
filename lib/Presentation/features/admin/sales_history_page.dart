@@ -1,3 +1,5 @@
+// ignore_for_file: unused_local_variable
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -617,10 +619,12 @@ String _detectType(Map<String, dynamic> m) {
   if (t.isNotEmpty) return t;
   if (m.containsKey('components')) return 'custom_blend';
   if (m.containsKey('drink_id') || m.containsKey('drink_name')) return 'drink';
-  if (m.containsKey('single_id') || m.containsKey('single_name'))
+  if (m.containsKey('single_id') || m.containsKey('single_name')) {
     return 'single';
-  if (m.containsKey('blend_id') || m.containsKey('blend_name'))
+  }
+  if (m.containsKey('blend_id') || m.containsKey('blend_name')) {
     return 'ready_blend';
+  }
   final items = _asListMap(m['items']);
   if (items.isNotEmpty) {
     final hasGrams = items.any((x) => x.containsKey('grams'));

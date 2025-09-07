@@ -12,7 +12,13 @@ const Set<String> kFlavoredNames = {
 };
 
 /// توليفات جاهزة مستثناة من التحويج
-const Set<String> kReadyBlendExcluded = {'توليفة فرنساوي'};
+const Set<String> kReadyBlendExcluded = {
+  'توليفة فرنساوي',
+  'شاي كيني',
+  'كوفى ميكس',
+  ' قهوة تخسيس',
+  'نسكافيه كلاسيك ',
+};
 
 /// سعر التحويج للأصناف المنفردة (ج/كجم) حسب الاسم
 double hawajRatePerKgForSingle(String name) {
