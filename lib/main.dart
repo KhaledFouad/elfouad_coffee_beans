@@ -19,14 +19,12 @@ Future<void> main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-      // لوج أخطاء Flutter (build/layout/rendering)
       FlutterError.onError = (FlutterErrorDetails details) {
         FlutterError.presentError(details);
         debugPrint('⚠️ FlutterError: ${details.exceptionAsString()}');
         if (details.stack != null) debugPrint(details.stack.toString());
       };
 
-      // لوج لأي أخطاء async غير ممسوكة (Timers/Futures…)
       ui.PlatformDispatcher.instance.onError =
           (Object error, StackTrace stack) {
             debugPrint('⚠️ Uncaught async error: $error');
@@ -34,14 +32,13 @@ Future<void> main() async {
             return true; // مايقفلش الأب
           };
 
-      // ✅ هيّئ Firebase الأول
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
       // if (kDebugMode) {
       //   try {
-      //     // await clearDrinks(); // لو عايز تفضّي القديم (اختياري)
+      //     // await clearDrinks();
       //     await seedDrinksFixed();
       //     await seedSingles();
       //     await seedBlends();

@@ -61,14 +61,15 @@ enum LineInputMode { grams, price }
 class _BlendLine {
   SingleVariantItem? item;
 
-  // وضع الإدخال
   LineInputMode mode = LineInputMode.grams;
 
-  // قيم الإدخال
-  int grams = 0; // للأرقام فقط
-  double price = 0.0; // للسعر (بن فقط)
+  // controllers لعرض النص
+  final TextEditingController gramsCtrl = TextEditingController();
+  final TextEditingController priceCtrl = TextEditingController();
 
-  // جرامات فعليّة تُستخدم في الخصم والحساب
+  int grams = 0;
+  double price = 0.0;
+
   int get gramsEffective {
     if (item == null) return 0;
     if (mode == LineInputMode.grams) return grams;
@@ -79,7 +80,6 @@ class _BlendLine {
 
   double get linePrice {
     if (item == null) return 0.0;
-    // نضمن الاتساق: السعر = جرامات فعليّة * سعر/جرام
     return item!.sellPerG * gramsEffective;
   }
 
@@ -107,12 +107,14 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   bool _isComplimentary = false;
   bool _isSpiced = false; // 50ج/كجم على إجمالي الوزن
 
-  // ملخصات (تعتمد على gramsEffective/linePrice لكل سطر)
+  // اختيارات النومباد للسطر الحالي
+  // ignore: unused_field
+  _LinePadTarget? _padSelection;
+
   double get _sumPriceLines =>
       _lines.fold<double>(0, (s, l) => s + l.linePrice);
   int get _sumGrams => _lines.fold<int>(0, (s, l) => s + l.gramsEffective);
 
-  // سعر التحويج (عرض وبيع فقط)
   double get _spiceRatePerKg => _isSpiced ? 50.0 : 0.0;
   double get _spiceAmount =>
       _isSpiced ? (_sumGrams / 1000.0) * _spiceRatePerKg : 0.0;
@@ -132,19 +134,14 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           .collection('singles')
           .orderBy('name')
           .get();
-
-      // فرز: المتاحين الأول، وبعدهم اللي stock==0
       final all = snap.docs.map(SingleVariantItem.fromDoc).toList();
       all.sort((a, b) {
         final az = a.stock <= 0 ? 1 : 0;
         final bz = b.stock <= 0 ? 1 : 0;
-        if (az != bz) return az.compareTo(bz); // المتاح الأول
+        if (az != bz) return az.compareTo(bz);
         return a.fullLabel.compareTo(b.fullLabel);
       });
-
-      setState(() {
-        _allSingles = all;
-      });
+      setState(() => _allSingles = all);
     } catch (e) {
       setState(() => _fatal = 'تعذر تحميل الأصناف المنفردة.');
     }
@@ -177,7 +174,6 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
     try {
       await db.runTransaction((txn) async {
-        // إجمالي المطلوب لكل doc (لو متكرر) من الجرامات الفعلية
         final Map<String, int> gramsById = {};
         final Map<String, double> currentStockById = {};
 
@@ -186,15 +182,13 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           gramsById[it.id] = (gramsById[it.id] ?? 0) + l.gramsEffective;
         }
 
-        // تأكيد المخزون برسالة ودّية
         for (final entry in gramsById.entries) {
           final id = entry.key;
           final need = entry.value.toDouble();
           final ref = db.collection('singles').doc(id);
           final snap = await txn.get(ref);
-          if (!snap.exists) {
-            throw UserFriendly('صنف غير موجود (docId=$id).');
-          }
+          if (!snap.exists) throw UserFriendly('صنف غير موجود (docId=$id).');
+
           final data = snap.data() as Map<String, dynamic>;
           final cur = (data['stock'] is num)
               ? (data['stock'] as num).toDouble()
@@ -211,7 +205,6 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           currentStockById[id] = cur;
         }
 
-        // خصم المخزون
         for (final entry in gramsById.entries) {
           final id = entry.key;
           final need = entry.value.toDouble();
@@ -220,7 +213,6 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           txn.update(ref, {'stock': cur - need});
         }
 
-        // تفاصيل السطور (للتسجيل) — تعتمد على gramsEffective
         final components = _lines.map((l) {
           final it = l.item!;
           final g = l.gramsEffective;
@@ -232,28 +224,22 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             'variant': it.variant,
             'unit': 'g',
             'grams': g.toDouble(),
-
             'price_per_kg': it.sellPricePerKg,
             'price_per_g': pricePerG,
             'line_total_price': pricePerG * g,
-
             'cost_per_kg': it.costPricePerKg,
             'cost_per_g': costPerG,
             'line_total_cost': costPerG * g,
           };
         }).toList();
 
-        // إجمالي التكلفة
         final double totalCost = _lines.fold<double>(
           0.0,
           (s, l) => s + (l.item!.costPerG * l.gramsEffective),
         );
-
-        // الربح
-        final double totalPrice = _totalPrice; // (بن + تحويج)
+        final double totalPrice = _totalPrice;
         final double profit = totalPrice - totalCost;
 
-        // إنشاء مستند البيع
         final saleRef = db.collection('sales').doc();
         txn.set(saleRef, {
           'created_at': DateTime.now().toUtc(),
@@ -261,14 +247,13 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           'type': 'custom_blend',
           'is_complimentary': _isComplimentary,
 
-          // بن + تحويج (أسعار البيع)
-          'lines_amount': _sumPriceLines, // سعر البن فقط
+          'lines_amount': _sumPriceLines,
           'is_spiced': _isSpiced,
           'spice_rate_per_kg': _spiceRatePerKg,
-          'spice_amount': _spiceAmount, // سعر التحويج
+          'spice_amount': _spiceAmount,
           'total_grams': _sumGrams.toDouble(),
-          'total_price': totalPrice, // (بن + تحويج)
-          // تكاليف
+          'total_price': totalPrice,
+
           'total_cost': totalCost,
           'profit_total': profit,
 
@@ -310,101 +295,85 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 1000;
 
-    // يمنع تغطية المحتوى بالكيبورد
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Scaffold(
-        resizeToAvoidBottomInset: true,
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(64),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(24),
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(64),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(24),
+          ),
+          child: AppBar(
+            automaticallyImplyLeading: false,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+              ),
+              onPressed: () => Navigator.maybePop(context),
+              tooltip: 'رجوع',
             ),
-            child: AppBar(
-              automaticallyImplyLeading: false,
-              leading: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white,
-                ),
-                onPressed: () => Navigator.maybePop(context),
-                tooltip: 'رجوع',
+            title: const Text(
+              'توليفات العميل',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 35,
+                color: Colors.white,
               ),
-              title: const Text(
-                'توليفات العميل',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 35,
-                  color: Colors.white,
-                ),
-              ),
-              centerTitle: true,
-              elevation: 8,
-              backgroundColor: Colors.transparent,
-              flexibleSpace: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF5D4037), Color(0xFF795548)],
-                  ),
+            ),
+            centerTitle: true,
+            elevation: 8,
+            backgroundColor: Colors.transparent,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF5D4037), Color(0xFF795548)],
                 ),
               ),
             ),
           ),
         ),
-        body: _allSingles.isEmpty
-            ? const Center(child: CircularProgressIndicator())
-            : LayoutBuilder(
-                builder: (context, c) {
-                  if (isWide) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-                            child: _buildComposerPane(),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 360,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                            child: _TotalsCard(
-                              isComplimentary: _isComplimentary,
-                              onComplimentaryChanged: _busy
-                                  ? null
-                                  : (v) => setState(
-                                      () => _isComplimentary = v ?? false,
-                                    ),
-                              isSpiced: _isSpiced,
-                              onSpicedChanged: _busy
-                                  ? null
-                                  : (v) =>
-                                        setState(() => _isSpiced = v ?? false),
-                              totalGrams: _sumGrams,
-                              totalPrice: _totalPrice,
-                              beansAmount: _sumPriceLines,
-                              spiceAmount: _spiceAmount,
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  } else {
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-                      child: Column(
-                        children: [
-                          _buildComposerPane(),
-                          const SizedBox(height: 12),
-                          _TotalsCard(
+      ),
+      body: _allSingles.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : LayoutBuilder(
+              builder: (context, c) {
+                final content = SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+                  child: Column(
+                    children: [
+                      _buildComposerPane(),
+                      if (!isWide) const SizedBox(height: 12),
+                      _TotalsCard(
+                        isComplimentary: _isComplimentary,
+                        onComplimentaryChanged: _busy
+                            ? null
+                            : (v) =>
+                                  setState(() => _isComplimentary = v ?? false),
+                        isSpiced: _isSpiced,
+                        onSpicedChanged: _busy
+                            ? null
+                            : (v) => setState(() => _isSpiced = v ?? false),
+                        totalGrams: _sumGrams,
+                        totalPrice: _totalPrice,
+                        beansAmount: _sumPriceLines,
+                        spiceAmount: _spiceAmount,
+                      ),
+                    ],
+                  ),
+                );
+
+                if (isWide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: content),
+                      SizedBox(
+                        width: 360,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                          child: _TotalsCard(
                             isComplimentary: _isComplimentary,
                             onComplimentaryChanged: _busy
                                 ? null
@@ -420,45 +389,45 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                             beansAmount: _sumPriceLines,
                             spiceAmount: _spiceAmount,
                           ),
-                        ],
+                        ),
                       ),
-                    );
-                  }
-                },
+                    ],
+                  );
+                } else {
+                  return content;
+                }
+              },
+            ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : () => Navigator.maybePop(context),
+                  child: const Text('إلغاء'),
+                ),
               ),
-        bottomNavigationBar: SafeArea(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              boxShadow: const [
-                BoxShadow(blurRadius: 8, color: Colors.black12),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _busy ? null : () => Navigator.maybePop(context),
-                    child: const Text('إلغاء'),
-                  ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _commitSale,
+                  icon: _busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check),
+                  label: const Text('تأكيد'),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _busy ? null : _commitSale,
-                    icon: _busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check),
-                    label: const Text('تأكيد'),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -499,6 +468,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
               onRemove: _lines.length == 1 || _busy
                   ? null
                   : () => setState(() => _lines.removeAt(idx)),
+              onOpenPad: (target) => _openPadForLine(line, target),
             ),
           );
         }).toList(),
@@ -510,29 +480,183 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
       ],
     );
   }
+
+  // ===== BottomSheet NumPad للسطر =====
+  void _openPadForLine(_BlendLine line, _LinePadTarget target) {
+    if (_busy) return;
+    setState(() => _padSelection = target);
+    showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _LineNumPad(
+        allowDot: target == _LinePadTarget.price,
+        onKey: (k) {
+          if (target == _LinePadTarget.grams) {
+            String s = line.gramsCtrl.text;
+            if (k == '⌫') {
+              if (s.isNotEmpty) s = s.substring(0, s.length - 1);
+            } else {
+              s += k;
+            }
+            s = s.replaceAll(RegExp(r'[^0-9]'), '');
+            s = s.isEmpty ? '' : BigInt.parse(s).toString();
+            line.gramsCtrl.text = s;
+            final v = int.tryParse(s) ?? 0;
+            line.grams = v.clamp(0, 1000000);
+          } else {
+            String s = line.priceCtrl.text;
+            if (k == '⌫') {
+              if (s.isNotEmpty) s = s.substring(0, s.length - 1);
+            } else if (k == '.') {
+              if (!s.contains('.')) s = s.isEmpty ? '0.' : (s + '.');
+            } else {
+              s += k;
+            }
+            s = s.replaceAll(RegExp(r'[^0-9.]'), '');
+            final parts = s.split('.');
+            if (parts.length > 2) s = parts[0] + '.' + parts.sublist(1).join();
+            line.priceCtrl.text = s;
+            final v = double.tryParse(s) ?? 0.0;
+            line.price = v.clamp(0, 1000000);
+          }
+          setState(() {}); // يحدّث الصناديق الجانبية
+        },
+        onClear: () {
+          if (target == _LinePadTarget.grams) {
+            line.gramsCtrl.clear();
+            line.grams = 0;
+          } else {
+            line.priceCtrl.clear();
+            line.price = 0.0;
+          }
+          setState(() {});
+        },
+        onDone: () => Navigator.pop(context),
+      ),
+    );
+  }
 }
 
-/// ====== كارت سطر ======
+enum _LinePadTarget { grams, price }
+
+class _LineNumPad extends StatelessWidget {
+  final bool allowDot;
+  final void Function(String k) onKey;
+  final VoidCallback onClear;
+  final VoidCallback onDone;
+
+  const _LineNumPad({
+    required this.allowDot,
+    required this.onKey,
+    required this.onClear,
+    required this.onDone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final keys = <String>[
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '00',
+      '0',
+      allowDot ? '.' : '⌫',
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 4,
+            width: 44,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.circular(100),
+            ),
+          ),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 2.4,
+            ),
+            itemCount: keys.length,
+            itemBuilder: (_, i) {
+              final k = keys[i];
+              return ElevatedButton(
+                onPressed: () => onKey(k),
+                child: Text(
+                  k,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onClear,
+                  child: const Text('مسح'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onDone,
+                  icon: const Icon(Icons.check),
+                  label: const Text('تم'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
 class _LineCard extends StatelessWidget {
   final List<SingleVariantItem> singles;
   final _BlendLine line;
   final VoidCallback onChanged;
   final VoidCallback? onRemove;
+  final void Function(_LinePadTarget target) onOpenPad;
 
   const _LineCard({
     required this.singles,
     required this.line,
     required this.onChanged,
     this.onRemove,
+    required this.onOpenPad,
   });
 
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 840;
 
-    // عناصر القائمة: الأصناف المنتهية في الآخر + غير قابلة للاختيار + ستايل رمادي مشطوب
     final dropdown = DropdownButtonFormField<SingleVariantItem>(
-      isExpanded: true, // مهم جداً يمنع الـ overflow
+      isExpanded: true,
       value: line.item,
       items: singles.map((it) {
         final outOfStock = it.stock <= 0;
@@ -555,7 +679,6 @@ class _LineCard extends StatelessWidget {
           ),
         );
       }).toList(),
-      // نرجّع نسخة مختصرة للعنصر المختار عشان ما يكسّرش
       selectedItemBuilder: (ctx) => singles.map((it) {
         final outOfStock = it.stock <= 0;
         return Align(
@@ -585,26 +708,16 @@ class _LineCard extends StatelessWidget {
         labelText: 'اختر الصنف',
         border: OutlineInputBorder(),
         isDense: true,
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 10,
-          vertical: 10,
-        ), // تخفيف بسيط
+        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       ),
     );
 
-    // حقل الجرامات (أرقام فقط)
     final gramField = TextFormField(
-      initialValue: line.mode == LineInputMode.grams && line.grams > 0
-          ? '${line.grams}'
-          : '',
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      controller: line.gramsCtrl,
+      readOnly: true,
+      showCursor: true,
       textAlign: TextAlign.center,
-      onChanged: (s) {
-        final v = int.tryParse(s.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-        line.grams = v.clamp(0, 1000000);
-        onChanged();
-      },
+      onTap: () => onOpenPad(_LinePadTarget.grams),
       decoration: const InputDecoration(
         labelText: 'الكمية (جم)',
         hintText: 'مثال: 250',
@@ -613,21 +726,12 @@ class _LineCard extends StatelessWidget {
       ),
     );
 
-    // حقل السعر (أرقام مع كسور)
     final priceField = TextFormField(
-      initialValue: line.mode == LineInputMode.price && line.price > 0
-          ? line.price.toStringAsFixed(2)
-          : '',
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'^\d+([.,]\d{0,2})?$')),
-      ],
+      controller: line.priceCtrl,
+      readOnly: true,
+      showCursor: true,
       textAlign: TextAlign.center,
-      onChanged: (s) {
-        final v = double.tryParse(s.replaceAll(',', '.')) ?? 0.0;
-        line.price = v.clamp(0, 1000000).toDouble();
-        onChanged();
-      },
+      onTap: () => onOpenPad(_LinePadTarget.price),
       decoration: const InputDecoration(
         labelText: 'المبلغ (جم)',
         hintText: 'مثال: 120.00',
@@ -636,9 +740,6 @@ class _LineCard extends StatelessWidget {
       ),
     );
 
-    // الصندوق اللي جنبه — حسب وضع الإدخال:
-    // - لو إدخال جرامات: نعرض السعر المحسوب
-    // - لو إدخال سعر: نعرض الجرامات المحسوبة
     Widget sideBox() {
       if (line.mode == LineInputMode.grams) {
         return _KVBox(
@@ -647,14 +748,13 @@ class _LineCard extends StatelessWidget {
           suffix: 'جم',
           fractionDigits: 2,
         );
-      } else {
-        return _KVBox(
-          title: 'الجرامات',
-          value: line.gramsEffective.toDouble(),
-          suffix: 'جم',
-          fractionDigits: 0,
-        );
       }
+      return _KVBox(
+        title: 'الجرامات',
+        value: line.gramsEffective.toDouble(),
+        suffix: 'جم',
+        fractionDigits: 0,
+      );
     }
 
     final modeAndField = Column(
@@ -676,7 +776,6 @@ class _LineCard extends StatelessWidget {
           selected: {line.mode},
           onSelectionChanged: (s) {
             line.mode = s.first;
-            onChanged();
           },
           showSelectedIcon: false,
         ),
@@ -701,7 +800,6 @@ class _LineCard extends StatelessWidget {
       icon: const Icon(Icons.delete_outline),
     );
 
-    // تخطيط Responsive
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -711,13 +809,10 @@ class _LineCard extends StatelessWidget {
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // القائمة
                   Expanded(flex: 5, child: dropdown),
                   const SizedBox(width: 12),
-                  // وضع الإدخال + الحقل
                   Expanded(flex: 5, child: modeAndField),
                   const SizedBox(width: 12),
-                  // الصندوق الجانبي (حسب الوضع)
                   Expanded(flex: 3, child: sideBox()),
                   const SizedBox(width: 8),
                   removeBtn,
@@ -725,21 +820,16 @@ class _LineCard extends StatelessWidget {
               )
             : Column(
                 children: [
-                  // القائمة سطر كامل
                   dropdown,
                   const SizedBox(height: 8),
-                  // صف: الحقل + الصندوق اللي جنبه
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // الحقل والوضع ياخدوا مساحة أكبر
                       Expanded(flex: 6, child: modeAndField),
                       const SizedBox(width: 8),
-                      // الصندوق المقابل
                       Expanded(flex: 4, child: sideBox()),
                     ],
                   ),
-                  // زرار الحذف يمين تحت
                   Align(alignment: Alignment.centerLeft, child: removeBtn),
                 ],
               ),
@@ -792,10 +882,8 @@ class _TotalsCard extends StatelessWidget {
   final ValueChanged<bool?>? onSpicedChanged;
   final int totalGrams;
   final double totalPrice;
-
-  // عرض الأسعار (مش تكاليف)
-  final double beansAmount; // مجموع أسعار البن
-  final double spiceAmount; // سعر التحويج
+  final double beansAmount;
+  final double spiceAmount;
 
   const _TotalsCard({
     required this.isComplimentary,

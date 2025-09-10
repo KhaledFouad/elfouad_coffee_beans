@@ -1,100 +1,73 @@
-// lib/utils_error.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'dart:js_util' as js_util; // لقراءة خصائص JS بأمان
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-// قراءة خاصية من كائن JS بأمان (ترجع '' لو مش موجود/مش متاح)
-String _readJsProp(Object? o, String prop) {
-  if (o == null) return '';
-  try {
-    if (js_util.hasProperty(o, prop)) {
-      final v = js_util.getProperty(o, prop);
-      return (v == null) ? '' : v.toString();
-    }
-  } catch (_) {}
-  return '';
-}
+// استيراد مشروط: على الويب نقرأ خصائص JS، وعلى الموبايل نرجّع null
+import 'js_safe_stub.dart' if (dart.library.js) 'js_safe_web.dart';
 
-String unwrapWeb(Object e, [StackTrace? st]) {
-  final sb = StringBuffer();
-
-  // الأساس
-  sb.writeln(e.toString());
-
-  // حاول تقرأ message/code/name/stack من كائنات JS (ويب فقط)
-  try {
-    final name = _readJsProp(e, 'name');
-    final code = _readJsProp(e, 'code');
-    final message = _readJsProp(e, 'message');
-    final jsStack = _readJsProp(e, 'stack');
-
-    if (name.isNotEmpty || code.isNotEmpty || message.isNotEmpty) {
-      sb.writeln('\n[JS fields]');
-      if (name.isNotEmpty) sb.writeln('name: $name');
-      if (code.isNotEmpty) sb.writeln('code: $code');
-      if (message.isNotEmpty) sb.writeln('message: $message');
-    }
-    if (jsStack.isNotEmpty) {
-      sb.writeln('\n[JS stack]');
-      sb.writeln(jsStack);
-    }
-  } catch (_) {
-    // تجاهل أي أخطاء interop
+/// رسالة خطأ ودّية جاهزة للعرض
+String prettyError(Object error, [StackTrace? st]) {
+  // أخطاءك الودّية
+  if (error is Exception && error.runtimeType.toString() == 'UserFriendly') {
+    // لو عندك كلاس UserFriendly في ملفات أخرى (بنفس الاسم)
+    try {
+      final msg = (error as dynamic).message?.toString();
+      if (msg != null && msg.trim().isNotEmpty) return msg;
+    } catch (_) {}
   }
 
-  if (st != null) {
-    sb.writeln('\n[Dart stack]');
-    sb.writeln(st);
+  if (error is FirebaseException) {
+    final code = error.code.isNotEmpty ? ' (${error.code})' : '';
+    final msg = error.message ?? 'خطأ من Firebase';
+    return '$msg$code';
   }
-  return sb.toString();
+
+  if (error is FormatException) return error.message;
+  if (error is AssertionError)
+    return error.message?.toString() ?? 'Assertion error';
+
+  // على الويب: جرّب تقرأ خصائص message/code إن كانت جايّة من JS
+  if (kIsWeb) {
+    final m = getJsProp(error, 'message')?.toString();
+    final c = getJsProp(error, 'code')?.toString();
+    if ((m != null && m.isNotEmpty) || (c != null && c.isNotEmpty)) {
+      return [m, c].where((e) => e != null && e.isNotEmpty).join(' • ');
+    }
+  }
+
+  // fallback
+  final s = error.toString();
+  if (s == 'Instance of \'FirebaseException\'' && kIsWeb) {
+    return 'حدث خطأ غير متوقع.';
+  }
+  return s;
 }
 
-void logError(Object e, [StackTrace? st]) {
-  // اطبع نص فقط، بدون تمرير كائنات “بوكسد” للـ VM service
-  final msg = unwrapWeb(e, st);
-  // debugPrint بيقسّم النص تلقائيًا (سلامة)
-  debugPrint('❌ $msg');
-}
-
+/// دialog موحّد لعرض الأخطاء
 Future<void> showErrorDialog(
   BuildContext context,
-  Object e, [
+  Object error, [
   StackTrace? st,
-]) async {
-  final msg = unwrapWeb(e, st);
-
-  if (!context.mounted) return;
-  // افتح الديالوج في microtask لتجنب أي "setState during build"
-  await Future.microtask(() {});
-
-  if (!context.mounted) return;
-  await showDialog(
+]) {
+  final msg = prettyError(error, st);
+  return showDialog(
     context: context,
     builder: (_) => AlertDialog(
-      title: const Text('تفاصيل الخطأ'),
-      content: SizedBox(
-        width: 720,
-        child: SelectableText(msg, style: const TextStyle(fontSize: 13)),
-      ),
+      title: const Text('تعذر إتمام العملية'),
+      content: SingleChildScrollView(child: Text(msg)),
       actions: [
         TextButton(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: msg));
-            if (context.mounted) Navigator.pop(context);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تم نسخ تفاصيل الخطأ')),
-              );
-            }
-          },
-          child: const Text('نسخ'),
-        ),
-        TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('إغلاق'),
+          child: const Text('حسناً'),
         ),
       ],
     ),
   );
+}
+
+/// لوج خفيف وقت التطوير
+void logError(Object e, [StackTrace? st]) {
+  // تجاهل في الإصدار النهائي لو حابب
+  debugPrint('❗ ERROR: $e');
+  if (st != null) debugPrint('STACK:\n$st');
 }
