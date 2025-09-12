@@ -14,6 +14,8 @@ class UserFriendly implements Exception {
 
 enum InputMode { grams, price }
 
+enum _PadTarget { grams, price, none }
+
 class BlendDialog extends StatefulWidget {
   final BlendGroup group;
   const BlendDialog({super.key, required this.group});
@@ -30,11 +32,32 @@ class _BlendDialogState extends State<BlendDialog> {
   late final List<String> _variantOptions;
   String? _variant;
 
-  // إدخال الكمية/السعر
+  // إدخال الكمية/السعر (مع نومباد داخلي)
   final TextEditingController _gramsCtrl = TextEditingController();
   final TextEditingController _priceCtrl = TextEditingController();
   InputMode _mode = InputMode.grams;
 
+  // نومباد داخلي
+  bool _showPad = false;
+  _PadTarget _padTarget = _PadTarget.none;
+
+  // ضيافة وتحويج
+  bool _isComplimentary = false;
+  bool _isSpiced = false;
+
+  // نكهات ممنوعة من التحويج + فرنساوي
+  static const Set<String> _flavored = {
+    'قهوة كراميل',
+    'قهوة بندق',
+    'قهوة بندق قطع',
+    'قهوة شوكلت',
+    'قهوة فانيليا',
+    'قهوة توت',
+    'قهوة فراولة',
+    'قهوة مانجو',
+  };
+
+  // ===== Helpers (Parsing) =====
   int _parseInt(String s) {
     final cleaned = s.replaceAll(RegExp(r'[^0-9]'), '');
     final v = int.tryParse(cleaned) ?? 0;
@@ -51,20 +74,6 @@ class _BlendDialogState extends State<BlendDialog> {
 
   int get _grams => _parseInt(_gramsCtrl.text);
   double get _inputPrice => _parseDouble(_priceCtrl.text);
-
-  bool _isComplimentary = false;
-  bool _isSpiced = false; // محوّج
-
-  static const Set<String> _flavored = {
-    'قهوة كراميل',
-    'قهوة بندق',
-    'قهوة بندق قطع',
-    'قهوة شوكلت',
-    'قهوة فانيليا',
-    'قهوة توت',
-    'قهوة فراولة',
-    'قهوة مانجو',
-  };
 
   bool get _canSpice {
     final sel = _selected;
@@ -91,11 +100,13 @@ class _BlendDialogState extends State<BlendDialog> {
   BlendVariant? get _selected {
     if (_variant != null) return widget.group.variants[_variant!];
     if (widget.group.variants.containsKey('')) return widget.group.variants[''];
-    if (widget.group.variants.length == 1)
+    if (widget.group.variants.length == 1) {
       return widget.group.variants.values.first;
+    }
     return null;
   }
 
+  // ===== Pricing =====
   double get _sellPerKg => _selected?.sellPricePerKg ?? 0.0;
   double get _costPerKg => _selected?.costPricePerKg ?? 0.0;
 
@@ -130,6 +141,143 @@ class _BlendDialogState extends State<BlendDialog> {
       _isComplimentary ? 0.0 : (_beansAmount + _spiceAmount);
   double get _totalCost => _costPerG * _gramsEffective;
 
+  // ===== NumPad (Internal) =====
+  void _openPad(_PadTarget target) {
+    if (_busy) return;
+    FocusScope.of(context).unfocus(); // امنع كيبورد النظام
+    setState(() {
+      _padTarget = target;
+      _showPad = true;
+    });
+  }
+
+  void _closePad() {
+    setState(() {
+      _showPad = false;
+      _padTarget = _PadTarget.none;
+    });
+  }
+
+  void _applyPadKey(String k) {
+    final ctrl = (_padTarget == _PadTarget.grams) ? _gramsCtrl : _priceCtrl;
+    if (k == 'back') {
+      if (ctrl.text.isNotEmpty)
+        ctrl.text = ctrl.text.substring(0, ctrl.text.length - 1);
+    } else if (k == 'clear') {
+      ctrl.clear();
+    } else if (k == 'dot') {
+      if (_padTarget == _PadTarget.price && !ctrl.text.contains('.')) {
+        ctrl.text = ctrl.text.isEmpty ? '0.' : '${ctrl.text}.';
+      }
+    } else if (k == 'done') {
+      _closePad();
+      return;
+    } else {
+      ctrl.text += k; // أرقام
+    }
+    setState(() {}); // لتحديث الحسابات المشتقة/العرض
+  }
+
+  Widget _numPad({required bool allowDot}) {
+    final keys = <String>[
+      '7',
+      '8',
+      '9',
+      '4',
+      '5',
+      '6',
+      '1',
+      '2',
+      '3',
+      allowDot ? 'dot' : 'clear',
+      '0',
+      'back',
+    ];
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final maxW = c.maxWidth;
+        final btnW = (maxW - (3 * 8) - (2 * 12)) / 3;
+        return Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.brown.shade50,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.brown.shade100),
+          ),
+          child: Column(
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: keys.map((k) {
+                  IconData? icon;
+                  String label = k;
+                  VoidCallback onTap;
+
+                  switch (k) {
+                    case 'back':
+                      icon = Icons.backspace_outlined;
+                      label = '';
+                      onTap = () => _applyPadKey('back');
+                      break;
+                    case 'clear':
+                      icon = Icons.clear;
+                      label = '';
+                      onTap = () => _applyPadKey('clear');
+                      break;
+                    case 'dot':
+                      label = '.';
+                      onTap = () => _applyPadKey('dot');
+                      break;
+                    default:
+                      onTap = () => _applyPadKey(k);
+                  }
+
+                  return SizedBox(
+                    width: btnW,
+                    height: 52,
+                    child: FilledButton.tonal(
+                      onPressed: _busy ? null : onTap,
+                      child: icon != null
+                          ? Icon(icon)
+                          : Text(
+                              label,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.all(
+                      const Color(0xFF543824),
+                    ),
+                  ),
+                  onPressed: _busy ? null : () => _applyPadKey('done'),
+                  child: const Text(
+                    'تم',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ===== Save =====
   Future<void> _commitSale() async {
     final sel = _selected;
     if (sel == null) {
@@ -268,6 +416,8 @@ class _BlendDialogState extends State<BlendDialog> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
+          clipBehavior:
+              Clip.antiAlias, // علشان النومباد يفضل جوّا حدود الديالوج
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: SingleChildScrollView(
@@ -403,6 +553,11 @@ class _BlendDialogState extends State<BlendDialog> {
                                     if (_isComplimentary &&
                                         _mode == InputMode.price) {
                                       _mode = InputMode.grams;
+                                      _priceCtrl.clear();
+                                      if (_showPad &&
+                                          _padTarget == _PadTarget.price) {
+                                        _closePad();
+                                      }
                                     }
                                   }),
                             dense: true,
@@ -421,6 +576,7 @@ class _BlendDialogState extends State<BlendDialog> {
                         ),
                         const SizedBox(height: 12),
 
+                        // محوّج (يختفي لو مش مسموح)
                         if (_canSpice)
                           Container(
                             decoration: BoxDecoration(
@@ -470,18 +626,28 @@ class _BlendDialogState extends State<BlendDialog> {
                             selected: {_mode},
                             onSelectionChanged: _busy
                                 ? null
-                                : (s) => setState(
-                                    () => _mode =
+                                : (s) => setState(() {
+                                    _mode =
                                         (s.first == InputMode.price &&
                                             _isComplimentary)
                                         ? InputMode.grams
-                                        : s.first,
-                                  ),
+                                        : s.first;
+                                    // قفل النومباد لو الهدف اتغير
+                                    if (_showPad) {
+                                      if (_padTarget == _PadTarget.price &&
+                                          _mode != InputMode.price)
+                                        _closePad();
+                                      if (_padTarget == _PadTarget.grams &&
+                                          _mode != InputMode.grams)
+                                        _closePad();
+                                    }
+                                  }),
                             showSelectedIcon: false,
                           ),
                         ),
                         const SizedBox(height: 12),
 
+                        // إدخال (readOnly + onTap يفتح النومباد)
                         if (_mode == InputMode.grams) ...[
                           Align(
                             alignment: Alignment.centerRight,
@@ -492,13 +658,11 @@ class _BlendDialogState extends State<BlendDialog> {
                                 Expanded(
                                   child: TextFormField(
                                     controller: _gramsCtrl,
+                                    readOnly: true,
                                     textAlign: TextAlign.center,
-                                    keyboardType: TextInputType.number,
-                                    textInputAction: TextInputAction.done,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                    onChanged: (_) => setState(() {}),
+                                    onTap: _busy
+                                        ? null
+                                        : () => _openPad(_PadTarget.grams),
                                     decoration: const InputDecoration(
                                       hintText: 'مثال: 250',
                                       isDense: true,
@@ -523,19 +687,12 @@ class _BlendDialogState extends State<BlendDialog> {
                                 Expanded(
                                   child: TextFormField(
                                     controller: _priceCtrl,
+                                    readOnly: true,
                                     enabled: !_isComplimentary,
                                     textAlign: TextAlign.center,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    textInputAction: TextInputAction.done,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.allow(
-                                        RegExp(r'[0-9.,]'),
-                                      ),
-                                    ],
-                                    onChanged: (_) => setState(() {}),
+                                    onTap: (_busy || _isComplimentary)
+                                        ? null
+                                        : () => _openPad(_PadTarget.price),
                                     decoration: const InputDecoration(
                                       hintText: 'مثال: 120.00',
                                       isDense: true,
@@ -606,6 +763,17 @@ class _BlendDialogState extends State<BlendDialog> {
                           const SizedBox(height: 10),
                           _WarningBox(text: _fatal!),
                         ],
+
+                        // النومباد جوّا الديالوج
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOut,
+                          child: _showPad
+                              ? _numPad(
+                                  allowDot: _padTarget == _PadTarget.price,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                       ],
                     ),
                   ),
@@ -623,6 +791,7 @@ class _BlendDialogState extends State<BlendDialog> {
                             child: const Text(
                               'إلغاء',
                               style: TextStyle(
+                                color: Color(0xFF543824),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -632,6 +801,11 @@ class _BlendDialogState extends State<BlendDialog> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: FilledButton(
+                            style: ButtonStyle(
+                              backgroundColor: WidgetStateProperty.all(
+                                const Color(0xFF543824),
+                              ),
+                            ),
                             onPressed: _busy ? null : _commitSale,
                             child: _busy
                                 ? const SizedBox(

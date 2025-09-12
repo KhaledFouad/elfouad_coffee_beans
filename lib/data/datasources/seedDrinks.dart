@@ -11,120 +11,128 @@ Future<void> seedDrinksFixed() async {
   // === عرّف مشروباتك هنا ===
   final List<Map<String, dynamic>> drinks = [
     // له درجات تحميص (التكلفة ثابتة لكل الدرجات)
+    // {
+    //   'name': 'قهوة تركي',
+    //   'unit': 'cup',
+    //   'sellPrice': 15.0,
+    //   'costPrice': 8.00,
+    //   'doubleCostPrice': 12.00, // 👈 تكلفة الدوبل (مختلفة عن 2x أحياناً)
+    //   'doubleDiscount': 5.0, // 👈 خصم الدوبل على السعر (اختياري، الافتراضي 10)
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': ['فاتح', 'وسط', 'غامق'],
+    // },
+    // {
+    //   'name': 'قهوة اسبريسو',
+    //   'unit': 'cup',
+    //   'sellPrice': 20.0,
+    //   'costPrice': 7.0,
+    //   'doubleCostPrice': 14.00, // 👈 تكلفة الدوبل للسبريسو
+    //   'doubleDiscount': 10.0, // 👈 خصم الدوبل
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   "name": "كوفي ميكس",
+    //   "unit": "cup",
+    //   "sellPrice": 15.0, // الافتراضي (مياه)
+    //   "costPrice": 10.0, // لو عندك تكلفة حطها
+    //   "image": "assets/drinks.jpg",
+    //   "roastLevels": <String>[],
+    //   "mixOptions": {
+    //     // هنستعملها في الديالوج
+    //     "waterPrice": 15.0,
+    //     "milkPrice": 20.0,
+    //   },
+    // },
+    // {
+    //   "name": "شاي",
+    //   "unit": "cup",
+    //   "sellPrice": 7.0,
+    //   "costPrice": 4.0,
+    //   "image": "assets/drinks.jpg",
+    //   "roastLevels": <String>[],
+    // },
     {
-      'name': 'قهوة تركي',
-      'unit': 'cup',
-      'sellPrice': 15.0,
-      'costPrice': 8.00,
-      'doubleCostPrice': 12.00, // 👈 تكلفة الدوبل (مختلفة عن 2x أحياناً)
-      'doubleDiscount': 5.0, // 👈 خصم الدوبل على السعر (اختياري، الافتراضي 10)
-      'image': 'assets/drinks.jpg',
-      'roastLevels': ['فاتح', 'وسط', 'غامق'],
-    },
-    {
-      'name': 'قهوة اسبريسو',
-      'unit': 'cup',
-      'sellPrice': 20.0,
-      'costPrice': 7.0,
-      'doubleCostPrice': 14.00, // 👈 تكلفة الدوبل للسبريسو
-      'doubleDiscount': 10.0, // 👈 خصم الدوبل
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      "name": "كوفي ميكس",
-      "unit": "cup",
-      "sellPrice": 15.0, // الافتراضي (مياه)
-      "costPrice": 10.0, // لو عندك تكلفة حطها
-      "image": "assets/drinks.jpg",
-      "roastLevels": <String>[],
-      "mixOptions": {
-        // هنستعملها في الديالوج
-        "waterPrice": 15.0,
-        "milkPrice": 20.0,
-      },
-    },
-    {
-      "name": "شاي",
-      "unit": "cup",
-      "sellPrice": 7.0, // الافتراضي (مياه)
-      "costPrice": 4.0, // لو عندك تكلفة حطها
+      "name": "مياه",
+      "unit": "bottle",
+      "sellPrice": 6.0,
+      "costPrice": 3.5,
       "image": "assets/drinks.jpg",
       "roastLevels": <String>[],
     },
 
-    {
-      'name': 'قهوة فرنساوي',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 17.00,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      'name': 'قهوة بندق',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 16.00,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      'name': 'قهوة بندق قطع',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 17.50,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      'name': 'قهوة شوكلت',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 16.00,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      'name': 'قهوة فانيليا',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 16.00,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      'name': 'قهوة كراميل',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 16.00,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      'name': 'قهوة مانجو',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 16.00,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      'name': 'قهوة توت',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 16.00,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
-    {
-      'name': 'قهوة فراولة',
-      'unit': 'cup',
-      'sellPrice': 25.0,
-      'costPrice': 16.00,
-      'image': 'assets/drinks.jpg',
-      'roastLevels': <String>[],
-    },
+    // {
+    //   'name': 'قهوة فرنساوي',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 17.00,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   'name': 'قهوة بندق',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 16.00,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   'name': 'قهوة بندق قطع',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 17.50,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   'name': 'قهوة شوكلت',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 16.00,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   'name': 'قهوة فانيليا',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 16.00,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   'name': 'قهوة كراميل',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 16.00,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   'name': 'قهوة مانجو',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 16.00,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   'name': 'قهوة توت',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 16.00,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
+    // {
+    //   'name': 'قهوة فراولة',
+    //   'unit': 'cup',
+    //   'sellPrice': 25.0,
+    //   'costPrice': 16.00,
+    //   'image': 'assets/drinks.jpg',
+    //   'roastLevels': <String>[],
+    // },
   ];
 
   // === كتابة الوثائق ===

@@ -40,8 +40,8 @@ Future<void> main() async {
       //   try {
       //     // await clearDrinks();
       //     await seedDrinksFixed();
-      //     await seedSingles();
-      //     await seedBlends();
+      //     // await seedSingles();
+      //     // await seedBlends();
       //   } catch (e, st) {
       //     debugPrint('❌ seeding failed: $e');
       //     debugPrint(st.toString());

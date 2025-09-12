@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class UserFriendly implements Exception {
   final String message;
@@ -13,6 +12,8 @@ class UserFriendly implements Exception {
 }
 
 enum CalcMode { byGrams, byMoney }
+
+enum _PadTarget { grams, money, none }
 
 class SingleDialog extends StatefulWidget {
   final SingleGroup group;
@@ -40,6 +41,10 @@ class _SingleDialogState extends State<SingleDialog> {
   CalcMode _mode = CalcMode.byGrams;
   bool _isComplimentary = false;
   bool _isSpiced = false;
+
+  // --- نومباد داخلي ---
+  bool _showPad = false;
+  _PadTarget _padTarget = _PadTarget.none;
 
   int _parseInt(String s) {
     final cleaned = s.replaceAll(RegExp(r'[^0-9]'), '');
@@ -162,6 +167,147 @@ class _SingleDialogState extends State<SingleDialog> {
   double get _totalPrice =>
       _isComplimentary ? 0.0 : (_beansAmount + _spiceAmount);
   double get _totalCost => _costPerG * _grams;
+
+  // ===== نومباد داخلي =====
+  void _openPad(_PadTarget target) {
+    if (_busy) return;
+    // امنع كيبورد النظام
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _padTarget = target;
+      _showPad = true;
+    });
+  }
+
+  void _closePad() {
+    setState(() {
+      _showPad = false;
+      _padTarget = _PadTarget.none;
+    });
+  }
+
+  void _applyPadKey(String k) {
+    final ctrl = (_padTarget == _PadTarget.grams) ? _gramsCtrl : _moneyCtrl;
+    if (k == 'back') {
+      if (ctrl.text.isNotEmpty) {
+        ctrl.text = ctrl.text.substring(0, ctrl.text.length - 1);
+      }
+    } else if (k == 'clear') {
+      ctrl.clear();
+    } else if (k == 'dot') {
+      // نقطة مسموحة في المال فقط
+      if (_padTarget == _PadTarget.money && !ctrl.text.contains('.')) {
+        ctrl.text = (ctrl.text.isEmpty ? '0.' : '${ctrl.text}.');
+      }
+    } else if (k == 'done') {
+      _closePad();
+      return;
+    } else {
+      // رقم
+      ctrl.text += k;
+    }
+    setState(() {}); // لتحديث الحسابات المشتقة
+  }
+
+  Widget _numPad({required bool allowDot}) {
+    // أزرار النومباد
+    final keys = <String>[
+      '7',
+      '8',
+      '9',
+      '4',
+      '5',
+      '6',
+      '1',
+      '2',
+      '3',
+      allowDot ? 'dot' : 'clear',
+      '0',
+      'back',
+    ];
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final maxW = c.maxWidth;
+        final btnSize = (maxW - 3 * 8 - 2 * 12) / 3; // 3 أزرار + هوامش
+        return Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.brown.shade50,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.brown.shade100),
+          ),
+          child: Column(
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: keys.map((k) {
+                  IconData? icon;
+                  String label = k;
+                  VoidCallback onTap;
+
+                  switch (k) {
+                    case 'back':
+                      icon = Icons.backspace_outlined;
+                      label = '';
+                      onTap = () => _applyPadKey('back');
+                      break;
+                    case 'clear':
+                      icon = Icons.clear;
+                      label = '';
+                      onTap = () => _applyPadKey('clear');
+                      break;
+                    case 'dot':
+                      label = '.';
+                      onTap = () => _applyPadKey('dot');
+                      break;
+                    default:
+                      onTap = () => _applyPadKey(k);
+                  }
+
+                  return SizedBox(
+                    width: btnSize,
+                    height: 52,
+                    child: FilledButton.tonal(
+                      onPressed: _busy ? null : onTap,
+                      child: icon != null
+                          ? Icon(icon)
+                          : Text(
+                              label,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.all(
+                      const Color(0xFF543824),
+                    ),
+                  ),
+                  onPressed: _busy ? null : () => _applyPadKey('done'),
+                  child: const Text(
+                    'تم',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _commitSale() async {
     final sel = _selected;
@@ -297,6 +443,7 @@ class _SingleDialogState extends State<SingleDialog> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
+          clipBehavior: Clip.antiAlias, // مهم علشان النومباد يفضل جوّا الحدود
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: SingleChildScrollView(
@@ -305,6 +452,7 @@ class _SingleDialogState extends State<SingleDialog> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Header
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(18),
@@ -347,6 +495,7 @@ class _SingleDialogState extends State<SingleDialog> {
                     ),
                   ),
 
+                  // Body
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -424,6 +573,10 @@ class _SingleDialogState extends State<SingleDialog> {
                                       if (_isComplimentary) {
                                         _mode = CalcMode.byGrams;
                                         _moneyCtrl.clear();
+                                        if (_showPad &&
+                                            _padTarget == _PadTarget.money) {
+                                          _closePad();
+                                        }
                                       }
                                     });
                                   },
@@ -490,12 +643,33 @@ class _SingleDialogState extends State<SingleDialog> {
                             selected: {_mode},
                             onSelectionChanged: _busy
                                 ? null
-                                : (s) => setState(() => _mode = s.first),
+                                : (s) {
+                                    setState(() {
+                                      _mode = s.first;
+                                      // لو اتحولنا لفلوس أثناء الضيافة اقفلها
+                                      if (_mode == CalcMode.byMoney &&
+                                          _isComplimentary) {
+                                        _mode = CalcMode.byGrams;
+                                      }
+                                      // اقفل النومباد لو الهدف مش متاح
+                                      if (_showPad) {
+                                        if (_padTarget == _PadTarget.money &&
+                                            _mode != CalcMode.byMoney) {
+                                          _closePad();
+                                        }
+                                        if (_padTarget == _PadTarget.grams &&
+                                            _mode != CalcMode.byGrams) {
+                                          _closePad();
+                                        }
+                                      }
+                                    });
+                                  },
                             showSelectedIcon: false,
                           ),
                         ),
                         const SizedBox(height: 12),
 
+                        // مدخلات الوزن/السعر (حقول readOnly + onTap تفتح النومباد)
                         if (_mode == CalcMode.byGrams) ...[
                           Align(
                             alignment: Alignment.centerRight,
@@ -506,13 +680,11 @@ class _SingleDialogState extends State<SingleDialog> {
                                 Expanded(
                                   child: TextFormField(
                                     controller: _gramsCtrl,
+                                    readOnly: true,
                                     textAlign: TextAlign.center,
-                                    keyboardType: TextInputType.number,
-                                    textInputAction: TextInputAction.done,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                    onChanged: (_) => setState(() {}),
+                                    onTap: _busy
+                                        ? null
+                                        : () => _openPad(_PadTarget.grams),
                                     decoration: const InputDecoration(
                                       hintText: 'مثال: 250',
                                       isDense: true,
@@ -537,19 +709,12 @@ class _SingleDialogState extends State<SingleDialog> {
                                 Expanded(
                                   child: TextFormField(
                                     controller: _moneyCtrl,
+                                    readOnly: true,
                                     enabled: !_isComplimentary,
                                     textAlign: TextAlign.center,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    textInputAction: TextInputAction.done,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.allow(
-                                        RegExp(r'[0-9.,]'),
-                                      ),
-                                    ],
-                                    onChanged: (_) => setState(() {}),
+                                    onTap: (_busy || _isComplimentary)
+                                        ? null
+                                        : () => _openPad(_PadTarget.money),
                                     decoration: const InputDecoration(
                                       hintText: 'مثال: 100',
                                       isDense: true,
@@ -579,6 +744,7 @@ class _SingleDialogState extends State<SingleDialog> {
                         _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
                         const SizedBox(height: 8),
 
+                        // الإجمالي
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.brown.shade50,
@@ -610,6 +776,17 @@ class _SingleDialogState extends State<SingleDialog> {
                           const SizedBox(height: 10),
                           _WarningBox(text: _fatal!),
                         ],
+
+                        // النومباد داخل الديالوج
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOut,
+                          child: _showPad
+                              ? _numPad(
+                                  allowDot: _padTarget == _PadTarget.money,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                       ],
                     ),
                   ),
@@ -627,6 +804,7 @@ class _SingleDialogState extends State<SingleDialog> {
                             child: const Text(
                               'إلغاء',
                               style: TextStyle(
+                                color: Color(0xFF543824),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -636,6 +814,11 @@ class _SingleDialogState extends State<SingleDialog> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: FilledButton(
+                            style: ButtonStyle(
+                              backgroundColor: WidgetStateProperty.all(
+                                const Color(0xFF543824),
+                              ),
+                            ),
                             onPressed: _busy ? null : _commitSale,
                             child: _busy
                                 ? const SizedBox(

@@ -474,6 +474,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
                             child: const Text(
                               'إلغاء',
                               style: TextStyle(
+                                color: Color(0xFF543824),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -483,6 +484,11 @@ class _DrinkDialogState extends State<DrinkDialog> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: FilledButton(
+                            style: ButtonStyle(
+                              backgroundColor: WidgetStateProperty.all(
+                                const Color(0xFF543824),
+                              ),
+                            ),
                             onPressed: _busy ? null : _commitSale,
                             child: _busy
                                 ? const SizedBox(

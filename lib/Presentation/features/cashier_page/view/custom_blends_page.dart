@@ -1,3 +1,4 @@
+// lib/Presentation/features/cashier_page/view/custom_blends_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -60,15 +61,10 @@ enum LineInputMode { grams, price }
 /// ====== سطر داخل توليفة العميل ======
 class _BlendLine {
   SingleVariantItem? item;
-
   LineInputMode mode = LineInputMode.grams;
 
-  // controllers لعرض النص
-  final TextEditingController gramsCtrl = TextEditingController();
-  final TextEditingController priceCtrl = TextEditingController();
-
-  int grams = 0;
-  double price = 0.0;
+  int grams = 0; // إدخال بالجرامات
+  double price = 0.0; // إدخال بالسعر (بن فقط)
 
   int get gramsEffective {
     if (item == null) return 0;
@@ -97,6 +93,8 @@ class CustomBlendsPage extends StatefulWidget {
   State<CustomBlendsPage> createState() => _CustomBlendsPageState();
 }
 
+enum _PadTargetType { none, lineGrams, linePrice }
+
 class _CustomBlendsPageState extends State<CustomBlendsPage> {
   bool _busy = false;
   String? _fatal;
@@ -107,10 +105,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   bool _isComplimentary = false;
   bool _isSpiced = false; // 50ج/كجم على إجمالي الوزن
 
-  // اختيارات النومباد للسطر الحالي
-  // ignore: unused_field
-  _LinePadTarget? _padSelection;
-
+  // إجماليات
   double get _sumPriceLines =>
       _lines.fold<double>(0, (s, l) => s + l.linePrice);
   int get _sumGrams => _lines.fold<int>(0, (s, l) => s + l.gramsEffective);
@@ -118,9 +113,178 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   double get _spiceRatePerKg => _isSpiced ? 50.0 : 0.0;
   double get _spiceAmount =>
       _isSpiced ? (_sumGrams / 1000.0) * _spiceRatePerKg : 0.0;
-
   double get _totalPrice =>
       _isComplimentary ? 0.0 : (_sumPriceLines + _spiceAmount);
+
+  // ===== نومباد داخلي للصفحة كلها =====
+  bool _showPad = false;
+  _PadTargetType _padType = _PadTargetType.none;
+  int _padLineIndex = -1;
+  String _padBuffer = '';
+
+  void _openPadForLine(int lineIndex, _PadTargetType type) {
+    if (_busy) return;
+    FocusScope.of(context).unfocus(); // اقفل كيبورد النظام
+    _padLineIndex = lineIndex;
+    _padType = type;
+
+    final line = _lines[_padLineIndex];
+    if (_padType == _PadTargetType.lineGrams) {
+      _padBuffer = line.grams > 0 ? '${line.grams}' : '';
+    } else if (_padType == _PadTargetType.linePrice) {
+      _padBuffer = line.price > 0 ? line.price.toStringAsFixed(2) : '';
+    } else {
+      _padBuffer = '';
+    }
+
+    setState(() => _showPad = true);
+  }
+
+  void _closePad() {
+    setState(() {
+      _showPad = false;
+      _padType = _PadTargetType.none;
+      _padLineIndex = -1;
+      _padBuffer = '';
+    });
+  }
+
+  void _applyPadKey(String k) {
+    if (_padLineIndex < 0 || _padLineIndex >= _lines.length) return;
+    final line = _lines[_padLineIndex];
+
+    if (k == 'back') {
+      if (_padBuffer.isNotEmpty) {
+        _padBuffer = _padBuffer.substring(0, _padBuffer.length - 1);
+      }
+    } else if (k == 'clear') {
+      _padBuffer = '';
+    } else if (k == 'dot') {
+      // نقطة مسموحة في "السعر" فقط
+      if (_padType == _PadTargetType.linePrice && !_padBuffer.contains('.')) {
+        _padBuffer = _padBuffer.isEmpty ? '0.' : '$_padBuffer.';
+      }
+    } else if (k == 'done') {
+      _closePad();
+      return;
+    } else {
+      // أرقام
+      _padBuffer += k;
+    }
+
+    // طبّق القيمة على السطر مباشرة (عرض حيّ)
+    if (_padType == _PadTargetType.lineGrams) {
+      final v = int.tryParse(_padBuffer.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+      line.grams = v.clamp(0, 1000000);
+    } else if (_padType == _PadTargetType.linePrice) {
+      final cleaned = _padBuffer
+          .replaceAll(',', '.')
+          .replaceAll(RegExp(r'[^0-9.]'), '');
+      final v = double.tryParse(cleaned) ?? 0.0;
+      line.price = v.clamp(0, 1000000).toDouble();
+    }
+
+    setState(() {});
+  }
+
+  Widget _numPad({required bool allowDot}) {
+    final keys = <String>[
+      '7',
+      '8',
+      '9',
+      '4',
+      '5',
+      '6',
+      '1',
+      '2',
+      '3',
+      allowDot ? 'dot' : 'clear',
+      '0',
+      'back',
+    ];
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final maxW = c.maxWidth;
+        final btnW = (maxW - (3 * 8) - (2 * 12)) / 3;
+        return Container(
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.brown.shade50,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.brown.shade100),
+          ),
+          child: Column(
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: keys.map((k) {
+                  IconData? icon;
+                  String label = k;
+                  VoidCallback onTap;
+
+                  switch (k) {
+                    case 'back':
+                      icon = Icons.backspace_outlined;
+                      label = '';
+                      onTap = () => _applyPadKey('back');
+                      break;
+                    case 'clear':
+                      icon = Icons.clear;
+                      label = '';
+                      onTap = () => _applyPadKey('clear');
+                      break;
+                    case 'dot':
+                      label = '.';
+                      onTap = () => _applyPadKey('dot');
+                      break;
+                    default:
+                      onTap = () => _applyPadKey(k);
+                  }
+
+                  return SizedBox(
+                    width: btnW,
+                    height: 52,
+                    child: FilledButton.tonal(
+                      onPressed: _busy ? null : onTap,
+                      child: icon != null
+                          ? Icon(icon)
+                          : Text(
+                              label,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.all(
+                      const Color(0xFF543824),
+                    ),
+                  ),
+                  onPressed: _busy ? null : () => _applyPadKey('done'),
+                  child: const Text(
+                    'تم',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -134,14 +298,18 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           .collection('singles')
           .orderBy('name')
           .get();
+
       final all = snap.docs.map(SingleVariantItem.fromDoc).toList();
       all.sort((a, b) {
         final az = a.stock <= 0 ? 1 : 0;
         final bz = b.stock <= 0 ? 1 : 0;
-        if (az != bz) return az.compareTo(bz);
+        if (az != bz) return az.compareTo(bz); // المتاح الأول
         return a.fullLabel.compareTo(b.fullLabel);
       });
-      setState(() => _allSingles = all);
+
+      setState(() {
+        _allSingles = all;
+      });
     } catch (e) {
       setState(() => _fatal = 'تعذر تحميل الأصناف المنفردة.');
     }
@@ -187,8 +355,9 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           final need = entry.value.toDouble();
           final ref = db.collection('singles').doc(id);
           final snap = await txn.get(ref);
-          if (!snap.exists) throw UserFriendly('صنف غير موجود (docId=$id).');
-
+          if (!snap.exists) {
+            throw UserFriendly('صنف غير موجود (docId=$id).');
+          }
           final data = snap.data() as Map<String, dynamic>;
           final cur = (data['stock'] is num)
               ? (data['stock'] as num).toDouble()
@@ -224,9 +393,11 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             'variant': it.variant,
             'unit': 'g',
             'grams': g.toDouble(),
+
             'price_per_kg': it.sellPricePerKg,
             'price_per_g': pricePerG,
             'line_total_price': pricePerG * g,
+
             'cost_per_kg': it.costPricePerKg,
             'cost_per_g': costPerG,
             'line_total_cost': costPerG * g,
@@ -237,6 +408,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           0.0,
           (s, l) => s + (l.item!.costPerG * l.gramsEffective),
         );
+
         final double totalPrice = _totalPrice;
         final double profit = totalPrice - totalCost;
 
@@ -295,360 +467,229 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 1000;
 
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(
-            bottom: Radius.circular(24),
-          ),
-          child: AppBar(
-            automaticallyImplyLeading: false,
-            leading: IconButton(
-              icon: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-              ),
-              onPressed: () => Navigator.maybePop(context),
-              tooltip: 'رجوع',
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(
+        bottom: 12, // نومباد داخلي مش كيبورد النظام
+      ),
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(64),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(24),
             ),
-            title: const Text(
-              'توليفات العميل',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 35,
-                color: Colors.white,
+            child: AppBar(
+              automaticallyImplyLeading: false,
+              leading: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white,
+                ),
+                onPressed: () => Navigator.maybePop(context),
+                tooltip: 'رجوع',
               ),
-            ),
-            centerTitle: true,
-            elevation: 8,
-            backgroundColor: Colors.transparent,
-            flexibleSpace: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF5D4037), Color(0xFF795548)],
+              title: const Text(
+                'توليفات العميل',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 35,
+                  color: Colors.white,
+                ),
+              ),
+              centerTitle: true,
+              elevation: 8,
+              backgroundColor: Colors.transparent,
+              flexibleSpace: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF5D4037), Color(0xFF795548)],
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
-      body: _allSingles.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : LayoutBuilder(
-              builder: (context, c) {
-                final content = SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-                  child: Column(
-                    children: [
-                      _buildComposerPane(),
-                      if (!isWide) const SizedBox(height: 12),
-                      _TotalsCard(
-                        isComplimentary: _isComplimentary,
-                        onComplimentaryChanged: _busy
-                            ? null
-                            : (v) =>
-                                  setState(() => _isComplimentary = v ?? false),
-                        isSpiced: _isSpiced,
-                        onSpicedChanged: _busy
-                            ? null
-                            : (v) => setState(() => _isSpiced = v ?? false),
-                        totalGrams: _sumGrams,
-                        totalPrice: _totalPrice,
-                        beansAmount: _sumPriceLines,
-                        spiceAmount: _spiceAmount,
-                      ),
-                    ],
-                  ),
-                );
-
-                if (isWide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: content),
-                      SizedBox(
-                        width: 360,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                          child: _TotalsCard(
-                            isComplimentary: _isComplimentary,
-                            onComplimentaryChanged: _busy
-                                ? null
-                                : (v) => setState(
-                                    () => _isComplimentary = v ?? false,
-                                  ),
-                            isSpiced: _isSpiced,
-                            onSpicedChanged: _busy
-                                ? null
-                                : (v) => setState(() => _isSpiced = v ?? false),
-                            totalGrams: _sumGrams,
-                            totalPrice: _totalPrice,
-                            beansAmount: _sumPriceLines,
-                            spiceAmount: _spiceAmount,
-                          ),
+        body: _allSingles.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : LayoutBuilder(
+                builder: (context, c) {
+                  final composer = SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              'مكوّنات التوليفة',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const Spacer(),
+                            FilledButton.icon(
+                              onPressed: _busy
+                                  ? null
+                                  : () => setState(
+                                      () => _lines.add(_BlendLine()),
+                                    ),
+                              icon: const Icon(Icons.add),
+                              label: const Text('إضافة مكوّن'),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        ..._lines.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final line = entry.value;
+                          return Padding(
+                            key: ValueKey('line_$idx'),
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _LineCard(
+                              singles: _allSingles,
+                              line: line,
+                              onChanged: () => setState(() {}),
+                              onRemove: _lines.length == 1 || _busy
+                                  ? null
+                                  : () => setState(() {
+                                      if (_showPad && _padLineIndex == idx) {
+                                        _closePad();
+                                      }
+                                      _lines.removeAt(idx);
+                                    }),
+                              onTapGrams: () => _openPadForLine(
+                                idx,
+                                _PadTargetType.lineGrams,
+                              ),
+                              onTapPrice: () => _openPadForLine(
+                                idx,
+                                _PadTargetType.linePrice,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        if (_fatal != null) ...[
+                          const SizedBox(height: 8),
+                          _WarningBox(text: _fatal!),
+                        ],
+                        // نومباد داخلي أسفل القائمة
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOut,
+                          child: _showPad
+                              ? _numPad(
+                                  allowDot:
+                                      _padType == _PadTargetType.linePrice,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
                   );
-                } else {
-                  return content;
-                }
-              },
-            ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _busy ? null : () => Navigator.maybePop(context),
-                  child: const Text('إلغاء'),
-                ),
+
+                  final totals = Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                    child: _TotalsCard(
+                      isComplimentary: _isComplimentary,
+                      onComplimentaryChanged: _busy
+                          ? null
+                          : (v) =>
+                                setState(() => _isComplimentary = v ?? false),
+                      isSpiced: _isSpiced,
+                      onSpicedChanged: _busy
+                          ? null
+                          : (v) => setState(() => _isSpiced = v ?? false),
+                      totalGrams: _sumGrams,
+                      totalPrice: _totalPrice,
+                      beansAmount: _sumPriceLines,
+                      spiceAmount: _spiceAmount,
+                    ),
+                  );
+
+                  if (isWide) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: composer),
+                        SizedBox(width: 360, child: totals),
+                      ],
+                    );
+                  } else {
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 90),
+                      child: Column(
+                        children: [
+                          composer,
+                          const SizedBox(height: 12),
+                          totals,
+                        ],
+                      ),
+                    );
+                  }
+                },
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _busy ? null : _commitSale,
-                  icon: _busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.check),
-                  label: const Text('تأكيد'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildComposerPane() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            const Text(
-              'مكوّنات التوليفة',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
-            const Spacer(),
-            FilledButton.icon(
-              onPressed: _busy
-                  ? null
-                  : () => setState(() => _lines.add(_BlendLine())),
-              icon: const Icon(Icons.add),
-              label: const Text('إضافة مكوّن'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        ..._lines.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final line = entry.value;
-          return Padding(
-            key: ValueKey('line_$idx'),
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _LineCard(
-              singles: _allSingles,
-              line: line,
-              onChanged: () => setState(() {}),
-              onRemove: _lines.length == 1 || _busy
-                  ? null
-                  : () => setState(() => _lines.removeAt(idx)),
-              onOpenPad: (target) => _openPadForLine(line, target),
-            ),
-          );
-        }).toList(),
-
-        if (_fatal != null) ...[
-          const SizedBox(height: 8),
-          _WarningBox(text: _fatal!),
-        ],
-      ],
-    );
-  }
-
-  // ===== BottomSheet NumPad للسطر =====
-  void _openPadForLine(_BlendLine line, _LinePadTarget target) {
-    if (_busy) return;
-    setState(() => _padSelection = target);
-    showModalBottomSheet(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => _LineNumPad(
-        allowDot: target == _LinePadTarget.price,
-        onKey: (k) {
-          if (target == _LinePadTarget.grams) {
-            String s = line.gramsCtrl.text;
-            if (k == '⌫') {
-              if (s.isNotEmpty) s = s.substring(0, s.length - 1);
-            } else {
-              s += k;
-            }
-            s = s.replaceAll(RegExp(r'[^0-9]'), '');
-            s = s.isEmpty ? '' : BigInt.parse(s).toString();
-            line.gramsCtrl.text = s;
-            final v = int.tryParse(s) ?? 0;
-            line.grams = v.clamp(0, 1000000);
-          } else {
-            String s = line.priceCtrl.text;
-            if (k == '⌫') {
-              if (s.isNotEmpty) s = s.substring(0, s.length - 1);
-            } else if (k == '.') {
-              if (!s.contains('.')) s = s.isEmpty ? '0.' : (s + '.');
-            } else {
-              s += k;
-            }
-            s = s.replaceAll(RegExp(r'[^0-9.]'), '');
-            final parts = s.split('.');
-            if (parts.length > 2) s = parts[0] + '.' + parts.sublist(1).join();
-            line.priceCtrl.text = s;
-            final v = double.tryParse(s) ?? 0.0;
-            line.price = v.clamp(0, 1000000);
-          }
-          setState(() {}); // يحدّث الصناديق الجانبية
-        },
-        onClear: () {
-          if (target == _LinePadTarget.grams) {
-            line.gramsCtrl.clear();
-            line.grams = 0;
-          } else {
-            line.priceCtrl.clear();
-            line.price = 0.0;
-          }
-          setState(() {});
-        },
-        onDone: () => Navigator.pop(context),
-      ),
-    );
-  }
-}
-
-enum _LinePadTarget { grams, price }
-
-class _LineNumPad extends StatelessWidget {
-  final bool allowDot;
-  final void Function(String k) onKey;
-  final VoidCallback onClear;
-  final VoidCallback onDone;
-
-  const _LineNumPad({
-    required this.allowDot,
-    required this.onKey,
-    required this.onClear,
-    required this.onDone,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final keys = <String>[
-      '1',
-      '2',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
-      '8',
-      '9',
-      '00',
-      '0',
-      allowDot ? '.' : '⌫',
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 4,
-            width: 44,
-            margin: const EdgeInsets.only(bottom: 12),
+        bottomNavigationBar: SafeArea(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             decoration: BoxDecoration(
-              color: Colors.black26,
-              borderRadius: BorderRadius.circular(100),
+              color: Theme.of(context).scaffoldBackgroundColor,
+              boxShadow: const [
+                BoxShadow(blurRadius: 8, color: Colors.black12),
+              ],
             ),
-          ),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 2.4,
-            ),
-            itemCount: keys.length,
-            itemBuilder: (_, i) {
-              final k = keys[i];
-              return ElevatedButton(
-                onPressed: () => onKey(k),
-                child: Text(
-                  k,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _busy ? null : () => Navigator.maybePop(context),
+                    child: const Text('إلغاء'),
                   ),
                 ),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onClear,
-                  child: const Text('مسح'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _busy ? null : _commitSale,
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check),
+                    label: const Text('تأكيد'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: onDone,
-                  icon: const Icon(Icons.check),
-                  label: const Text('تم'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-        ],
+        ),
       ),
     );
   }
 }
 
+/// ====== كارت سطر ======
 class _LineCard extends StatelessWidget {
   final List<SingleVariantItem> singles;
   final _BlendLine line;
   final VoidCallback onChanged;
   final VoidCallback? onRemove;
-  final void Function(_LinePadTarget target) onOpenPad;
+
+  final VoidCallback onTapGrams;
+  final VoidCallback onTapPrice;
 
   const _LineCard({
     required this.singles,
     required this.line,
     required this.onChanged,
+    required this.onTapGrams,
+    required this.onTapPrice,
     this.onRemove,
-    required this.onOpenPad,
   });
 
   @override
@@ -712,12 +753,16 @@ class _LineCard extends StatelessWidget {
       ),
     );
 
+    // حقل الجرامات (readOnly + يفتح نومباد)
     final gramField = TextFormField(
-      controller: line.gramsCtrl,
       readOnly: true,
-      showCursor: true,
+      controller: TextEditingController(
+        text: line.mode == LineInputMode.grams && line.grams > 0
+            ? '${line.grams}'
+            : '',
+      ),
+      onTap: onTapGrams,
       textAlign: TextAlign.center,
-      onTap: () => onOpenPad(_LinePadTarget.grams),
       decoration: const InputDecoration(
         labelText: 'الكمية (جم)',
         hintText: 'مثال: 250',
@@ -726,12 +771,16 @@ class _LineCard extends StatelessWidget {
       ),
     );
 
+    // حقل السعر (readOnly + يفتح نومباد)
     final priceField = TextFormField(
-      controller: line.priceCtrl,
       readOnly: true,
-      showCursor: true,
+      controller: TextEditingController(
+        text: line.mode == LineInputMode.price && line.price > 0
+            ? line.price.toStringAsFixed(2)
+            : '',
+      ),
+      onTap: onTapPrice,
       textAlign: TextAlign.center,
-      onTap: () => onOpenPad(_LinePadTarget.price),
       decoration: const InputDecoration(
         labelText: 'المبلغ (جم)',
         hintText: 'مثال: 120.00',
@@ -748,13 +797,14 @@ class _LineCard extends StatelessWidget {
           suffix: 'جم',
           fractionDigits: 2,
         );
+      } else {
+        return _KVBox(
+          title: 'الجرامات',
+          value: line.gramsEffective.toDouble(),
+          suffix: 'جم',
+          fractionDigits: 0,
+        );
       }
-      return _KVBox(
-        title: 'الجرامات',
-        value: line.gramsEffective.toDouble(),
-        suffix: 'جم',
-        fractionDigits: 0,
-      );
     }
 
     final modeAndField = Column(
@@ -776,6 +826,7 @@ class _LineCard extends StatelessWidget {
           selected: {line.mode},
           onSelectionChanged: (s) {
             line.mode = s.first;
+            onChanged();
           },
           showSelectedIcon: false,
         ),
@@ -882,6 +933,7 @@ class _TotalsCard extends StatelessWidget {
   final ValueChanged<bool?>? onSpicedChanged;
   final int totalGrams;
   final double totalPrice;
+
   final double beansAmount;
   final double spiceAmount;
 
