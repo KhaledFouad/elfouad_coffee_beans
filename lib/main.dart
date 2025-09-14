@@ -80,7 +80,7 @@ class MyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       debugShowCheckedModeBanner: false,
-      home: CashierHome(), // تأكد إن SplashScreen مفيهوش initializeApp تاني
+      home: CashierHome(),
     );
   }
 }

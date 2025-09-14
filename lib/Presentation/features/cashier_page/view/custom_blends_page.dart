@@ -533,6 +533,11 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                             ),
                             const Spacer(),
                             FilledButton.icon(
+                              style: ButtonStyle(
+                                backgroundColor: WidgetStateProperty.all(
+                                  const Color(0xFF543824),
+                                ),
+                              ),
                               onPressed: _busy
                                   ? null
                                   : () => setState(
@@ -647,12 +652,20 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: _busy ? null : () => Navigator.maybePop(context),
-                    child: const Text('إلغاء'),
+                    child: const Text(
+                      'إلغاء',
+                      style: TextStyle(color: Color(0xFF543824)),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton.icon(
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStateProperty.all(
+                        const Color(0xFF543824),
+                      ),
+                    ),
                     onPressed: _busy ? null : _commitSale,
                     icon: _busy
                         ? const SizedBox(

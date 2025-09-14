@@ -1,4 +1,4 @@
-import 'package:elfouad_coffee_beans/Presentation/features/admin/sales_history_page.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/sales/sales_history_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -45,13 +45,18 @@ class CashierHome extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: const Color(0xFF543824),
+
           onPressed: () {
             Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const SalesHistoryPage()));
           },
-          icon: const Icon(Icons.receipt_long),
-          label: const Text('سجلّ المبيعات'),
+          icon: const Icon(Icons.receipt_long, color: Colors.white),
+          label: const Text(
+            'سجلّ المبيعات',
+            style: TextStyle(color: Colors.white),
+          ),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         backgroundColor: const Color(0xFFF5F5F5),
