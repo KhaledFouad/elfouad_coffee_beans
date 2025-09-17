@@ -716,6 +716,7 @@ class _BlendDialogState extends State<BlendDialog> {
                               Text(
                                 '${_gramsEffective.toString()} جم',
                                 style: const TextStyle(
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),

@@ -734,7 +734,10 @@ class _SingleDialogState extends State<SingleDialog> {
                             alignment: Alignment.centerRight,
                             child: Text(
                               '≈ الجرامات المحسوبة: ${_grams.toString()} جم',
-                              style: const TextStyle(color: Colors.black54),
+                              style: const TextStyle(
+                                color: Colors.black54,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ],
