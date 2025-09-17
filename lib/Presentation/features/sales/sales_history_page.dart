@@ -266,7 +266,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                 final entries = byDay[day]!;
                 final sumPrice = _sum(entries, 'total_price');
                 final sumCost = _sum(entries, 'total_cost');
-                final sumProfit = sumPrice - sumCost;
+                // final sumProfit = sumPrice - sumCost;
                 final cups = _sumDrinkCups(entries);
                 final grams = _sumBeansGrams(entries);
 
@@ -277,7 +277,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                     entries: entries,
                     sumPrice: sumPrice,
                     sumCost: sumCost,
-                    sumProfit: sumProfit,
+                    // sumProfit: sumProfit,
                     cups: cups,
                     grams: grams,
                     // onEdit: (doc) => _openEditSheet(doc),
@@ -296,7 +296,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
 class _DaySection extends StatelessWidget {
   final String day;
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> entries;
-  final double sumPrice, sumCost, sumProfit;
+  final double sumPrice, sumCost;
   final int cups;
   final double grams;
   // final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onEdit;
@@ -307,7 +307,7 @@ class _DaySection extends StatelessWidget {
     required this.entries,
     required this.sumPrice,
     required this.sumCost,
-    required this.sumProfit,
+    // required this.sumProfit,
     required this.cups,
     required this.grams,
     // required this.onEdit,
@@ -336,8 +336,8 @@ class _DaySection extends StatelessWidget {
                 _pill(Icons.attach_money, 'مبيعات', sumPrice),
                 const SizedBox(width: 6),
                 _pill(Icons.factory, 'تكلفة', sumCost),
-                const SizedBox(width: 6),
-                _pill(Icons.trending_up, 'ربح', sumProfit),
+                // const SizedBox(width: 6),
+                // _pill(Icons.trending_up, 'ربح', sumProfit),
               ],
             ),
             const SizedBox(height: 8),
@@ -412,7 +412,7 @@ class _SaleTile extends StatelessWidget {
 
     final totalPrice = _num(m['total_price']);
     final totalCost = _num(m['total_cost']);
-    final profit = totalPrice - totalCost;
+    // final profit = totalPrice - totalCost;
 
     final components = _extractComponents(m, type);
 
@@ -458,7 +458,7 @@ class _SaleTile extends StatelessWidget {
         children: [
           _kv('الإجمالي', totalPrice),
           _kv('التكلفة', totalCost),
-          _kv('الربح', profit),
+          // _kv('الربح', profit),
           // Row(
           //   mainAxisSize: MainAxisSize.min,
           //   children: [
@@ -823,7 +823,7 @@ class _SaleEditSheetState extends State<_SaleEditSheet> {
 
       double newTotalPrice = oldTotalPrice;
       double newTotalCost = oldTotalCost;
-      double newProfit = 0.0;
+      // double newProfit = 0.0;
 
       if (type == 'drink') {
         // حنضمن qty على الأقل 1
@@ -855,7 +855,7 @@ class _SaleEditSheetState extends State<_SaleEditSheet> {
 
         updates['total_price'] = newTotalPrice;
         updates['total_cost'] = newTotalCost;
-        updates['profit_total'] = newTotalPrice - newTotalCost;
+        // updates['profit_total'] = newTotalPrice - newTotalCost;
       } else if (type == 'single' || type == 'ready_blend') {
         // grams قد يكون صفر لو المستخدم ما دخلوش—نحافظ على القديم لو مفيش إدخال
         grams = grams > 0 ? grams : numOf(_m['grams']);
@@ -942,7 +942,7 @@ class _SaleEditSheetState extends State<_SaleEditSheet> {
 
         updates['total_price'] = newTotalPrice;
         updates['total_cost'] = newTotalCost;
-        updates['profit_total'] = newTotalPrice - newTotalCost;
+        // updates['profit_total'] = newTotalPrice - newTotalCost;
       } else if (type == 'custom_blend') {
         final gramsAll = totalGramsSaved > 0
             ? totalGramsSaved
@@ -976,13 +976,13 @@ class _SaleEditSheetState extends State<_SaleEditSheet> {
         newTotalCost = numOf(_m['total_cost']); // مجموع تكاليف البن من السطور
         updates['total_price'] = newTotalPrice;
         updates['total_cost'] = newTotalCost;
-        updates['profit_total'] = newTotalPrice - newTotalCost;
+        // updates['profit_total'] = newTotalPrice - newTotalCost;
       } else {
         // أنواع غير معروفة: التزم بالسعر المدخل أو صفر لو ضيافة
         newTotalPrice = isCompl ? 0.0 : uiTotalPrice;
         updates['total_price'] = newTotalPrice;
         updates['total_cost'] = oldTotalCost;
-        updates['profit_total'] = newTotalPrice - oldTotalCost;
+        // updates['profit_total'] = newTotalPrice - oldTotalCost;
         updates['manual_override'] = true;
       }
 
