@@ -189,15 +189,16 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
   Widget _numPad({required bool allowDot}) {
     final keys = <String>[
-      '7',
-      '8',
-      '9',
-      '4',
-      '5',
-      '6',
       '1',
       '2',
       '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+
       allowDot ? 'dot' : 'clear',
       '0',
       'back',
