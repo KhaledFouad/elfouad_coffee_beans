@@ -264,7 +264,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               itemBuilder: (context, i) {
                 final day = dayKeys[i];
                 final entries = byDay[day]!;
-                // final sumPrice = _sum(entries, 'total_price');
+                final sumPrice = _sum(entries, 'total_price');
                 // final sumCost = _sum(entries, 'total_cost');
                 // // final sumProfit = sumPrice - sumCost;
                 // final cups = _sumDrinkCups(entries);
@@ -275,7 +275,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                   child: _DaySection(
                     day: day,
                     entries: entries,
-                    // sumPrice: sumPrice,
+                    sumPrice: sumPrice,
                     // sumCost: sumCost,
                     // sumProfit: sumProfit,
                     // cups: cups,
@@ -296,7 +296,7 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
 class _DaySection extends StatelessWidget {
   final String day;
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> entries;
-  // final double sumPrice, sumCost;
+  final double sumPrice;
   // final int cups;
   // final double grams;
   // final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onEdit;
@@ -305,7 +305,7 @@ class _DaySection extends StatelessWidget {
   const _DaySection({
     required this.day,
     required this.entries,
-    // required this.sumPrice,
+    required this.sumPrice,
     // required this.sumCost,
     // required this.sumProfit,
     // required this.cups,
@@ -332,8 +332,8 @@ class _DaySection extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                // const Spacer(),
-                // _pill(Icons.attach_money, 'مبيعات', sumPrice),
+                const Spacer(),
+                _pill(Icons.attach_money, 'مبيعات', sumPrice),
                 // const SizedBox(width: 6),
                 // _pill(Icons.factory, 'تكلفة', sumCost),
                 // const SizedBox(width: 6),
