@@ -87,43 +87,43 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
     }
   }
 
-  void _openEditSheet(DocumentSnapshot<Map<String, dynamic>> doc) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => _SaleEditSheet(snap: doc),
-    );
-  }
+  // void _openEditSheet(DocumentSnapshot<Map<String, dynamic>> doc) {
+  //   showModalBottomSheet(
+  //     context: context,
+  //     isScrollControlled: true,
+  //     useSafeArea: true,
+  //     shape: const RoundedRectangleBorder(
+  //       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+  //     ),
+  //     builder: (_) => _SaleEditSheet(snap: doc),
+  //   );
+  // }
 
-  Future<void> _deleteSale(DocumentSnapshot<Map<String, dynamic>> doc) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('تأكيد الحذف'),
-        content: const Text('هل تريد حذف عملية البيع هذه؟ لا يمكن التراجع.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('حذف'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await doc.reference.delete();
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('تم حذف عملية البيع')));
-  }
+  // Future<void> _deleteSale(DocumentSnapshot<Map<String, dynamic>> doc) async {
+  //   final ok = await showDialog<bool>(
+  //     context: context,
+  //     builder: (_) => AlertDialog(
+  //       title: const Text('تأكيد الحذف'),
+  //       content: const Text('هل تريد حذف عملية البيع هذه؟ لا يمكن التراجع.'),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () => Navigator.pop(context, false),
+  //           child: const Text('إلغاء'),
+  //         ),
+  //         FilledButton(
+  //           onPressed: () => Navigator.pop(context, true),
+  //           child: const Text('حذف'),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  //   if (ok != true) return;
+  //   await doc.reference.delete();
+  //   if (!mounted) return;
+  //   ScaffoldMessenger.of(
+  //     context,
+  //   ).showSnackBar(const SnackBar(content: Text('تم حذف عملية البيع')));
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -280,8 +280,8 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
                     sumProfit: sumProfit,
                     cups: cups,
                     grams: grams,
-                    onEdit: (doc) => _openEditSheet(doc),
-                    onDelete: (doc) => _deleteSale(doc),
+                    // onEdit: (doc) => _openEditSheet(doc),
+                    // onDelete: (doc) => _deleteSale(doc),
                   ),
                 );
               },
@@ -299,8 +299,8 @@ class _DaySection extends StatelessWidget {
   final double sumPrice, sumCost, sumProfit;
   final int cups;
   final double grams;
-  final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onEdit;
-  final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onDelete;
+  // final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onEdit;
+  // final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onDelete;
 
   const _DaySection({
     required this.day,
@@ -310,8 +310,8 @@ class _DaySection extends StatelessWidget {
     required this.sumProfit,
     required this.cups,
     required this.grams,
-    required this.onEdit,
-    required this.onDelete,
+    // required this.onEdit,
+    // required this.onDelete,
   });
 
   @override
@@ -352,8 +352,8 @@ class _DaySection extends StatelessWidget {
             ...entries.map(
               (e) => _SaleTile(
                 doc: e,
-                onEdit: () => onEdit(e),
-                onDelete: () => onDelete(e),
+                // onEdit: () => onEdit(e),
+                // onDelete: () => onDelete(e),
               ),
             ),
           ],
@@ -390,12 +390,12 @@ class _DaySection extends StatelessWidget {
 
 class _SaleTile extends StatelessWidget {
   final QueryDocumentSnapshot<Map<String, dynamic>> doc;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  // final VoidCallback onEdit;
+  // final VoidCallback onDelete;
   const _SaleTile({
     required this.doc,
-    required this.onEdit,
-    required this.onDelete,
+    // required this.onEdit,
+    // required this.onDelete,
   });
 
   @override
@@ -459,21 +459,21 @@ class _SaleTile extends StatelessWidget {
           _kv('الإجمالي', totalPrice),
           _kv('التكلفة', totalCost),
           _kv('الربح', profit),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: 'تعديل',
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit),
-              ),
-              IconButton(
-                tooltip: 'حذف',
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
-              ),
-            ],
-          ),
+          // Row(
+          //   mainAxisSize: MainAxisSize.min,
+          //   children: [
+          //     IconButton(
+          //       tooltip: 'تعديل',
+          //       onPressed: onEdit,
+          //       icon: const Icon(Icons.edit),
+          //     ),
+          //     IconButton(
+          //       tooltip: 'حذف',
+          //       onPressed: onDelete,
+          //       icon: const Icon(Icons.delete_outline),
+          //     ),
+          //   ],
+          // ),
         ],
       ),
       children: [
