@@ -227,36 +227,36 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               return s;
             }
 
-            int _sumDrinkCups(
-              List<QueryDocumentSnapshot<Map<String, dynamic>>> es,
-            ) {
-              int s = 0;
-              for (final e in es) {
-                final m = e.data();
-                final t = (m['type'] ?? '').toString();
-                if (t == 'drink') {
-                  final q = _num(m['quantity']);
-                  s += (q > 0 ? q.round() : 1);
-                }
-              }
-              return s;
-            }
+            // int _sumDrinkCups(
+            //   List<QueryDocumentSnapshot<Map<String, dynamic>>> es,
+            // ) {
+            //   int s = 0;
+            //   for (final e in es) {
+            //     final m = e.data();
+            //     final t = (m['type'] ?? '').toString();
+            //     if (t == 'drink') {
+            //       final q = _num(m['quantity']);
+            //       s += (q > 0 ? q.round() : 1);
+            //     }
+            //   }
+            //   return s;
+            // }
 
-            double _sumBeansGrams(
-              List<QueryDocumentSnapshot<Map<String, dynamic>>> es,
-            ) {
-              double s = 0;
-              for (final e in es) {
-                final m = e.data();
-                final t = (m['type'] ?? '').toString();
-                if (t == 'single' || t == 'ready_blend') {
-                  s += _num(m['grams']);
-                } else if (t == 'custom_blend') {
-                  s += _num(m['total_grams']);
-                }
-              }
-              return s;
-            }
+            // double _sumBeansGrams(
+            //   List<QueryDocumentSnapshot<Map<String, dynamic>>> es,
+            // ) {
+            //   double s = 0;
+            //   for (final e in es) {
+            //     final m = e.data();
+            //     final t = (m['type'] ?? '').toString();
+            //     if (t == 'single' || t == 'ready_blend') {
+            //       s += _num(m['grams']);
+            //     } else if (t == 'custom_blend') {
+            //       s += _num(m['total_grams']);
+            //     }
+            //   }
+            //   return s;
+            // }
 
             return ListView.builder(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
@@ -264,22 +264,22 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
               itemBuilder: (context, i) {
                 final day = dayKeys[i];
                 final entries = byDay[day]!;
-                final sumPrice = _sum(entries, 'total_price');
-                final sumCost = _sum(entries, 'total_cost');
-                // final sumProfit = sumPrice - sumCost;
-                final cups = _sumDrinkCups(entries);
-                final grams = _sumBeansGrams(entries);
+                // final sumPrice = _sum(entries, 'total_price');
+                // final sumCost = _sum(entries, 'total_cost');
+                // // final sumProfit = sumPrice - sumCost;
+                // final cups = _sumDrinkCups(entries);
+                // final grams = _sumBeansGrams(entries);
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _DaySection(
                     day: day,
                     entries: entries,
-                    sumPrice: sumPrice,
-                    sumCost: sumCost,
+                    // sumPrice: sumPrice,
+                    // sumCost: sumCost,
                     // sumProfit: sumProfit,
-                    cups: cups,
-                    grams: grams,
+                    // cups: cups,
+                    // grams: grams,
                     // onEdit: (doc) => _openEditSheet(doc),
                     // onDelete: (doc) => _deleteSale(doc),
                   ),
@@ -296,20 +296,20 @@ class _SalesHistoryPageState extends State<SalesHistoryPage> {
 class _DaySection extends StatelessWidget {
   final String day;
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> entries;
-  final double sumPrice, sumCost;
-  final int cups;
-  final double grams;
+  // final double sumPrice, sumCost;
+  // final int cups;
+  // final double grams;
   // final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onEdit;
   // final void Function(DocumentSnapshot<Map<String, dynamic>> doc) onDelete;
 
   const _DaySection({
     required this.day,
     required this.entries,
-    required this.sumPrice,
-    required this.sumCost,
+    // required this.sumPrice,
+    // required this.sumCost,
     // required this.sumProfit,
-    required this.cups,
-    required this.grams,
+    // required this.cups,
+    // required this.grams,
     // required this.onEdit,
     // required this.onDelete,
   });
@@ -332,22 +332,22 @@ class _DaySection extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const Spacer(),
-                _pill(Icons.attach_money, 'مبيعات', sumPrice),
-                const SizedBox(width: 6),
-                _pill(Icons.factory, 'تكلفة', sumCost),
+                // const Spacer(),
+                // _pill(Icons.attach_money, 'مبيعات', sumPrice),
+                // const SizedBox(width: 6),
+                // _pill(Icons.factory, 'تكلفة', sumCost),
                 // const SizedBox(width: 6),
                 // _pill(Icons.trending_up, 'ربح', sumProfit),
               ],
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _pill(Icons.local_cafe, 'مشروبات', cups.toDouble()),
-                const SizedBox(width: 6),
-                _pill(Icons.scale, 'جرام بن', grams),
-              ],
-            ),
+            // const SizedBox(height: 8),
+            // Row(
+            //   children: [
+            //     _pill(Icons.local_cafe, 'مشروبات', cups.toDouble()),
+            //     const SizedBox(width: 6),
+            //     _pill(Icons.scale, 'جرام بن', grams),
+            //   ],
+            // ),
             const Divider(height: 18),
             ...entries.map(
               (e) => _SaleTile(
@@ -411,7 +411,7 @@ class _SaleTile extends StatelessWidget {
     final isCompl = (m['is_complimentary'] ?? false) == true;
 
     final totalPrice = _num(m['total_price']);
-    final totalCost = _num(m['total_cost']);
+    // final totalCost = _num(m['total_cost']);
     // final profit = totalPrice - totalCost;
 
     final components = _extractComponents(m, type);
@@ -451,31 +451,32 @@ class _SaleTile extends StatelessWidget {
           ),
         ],
       ),
-      subtitle: Wrap(
-        spacing: 10,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          _kv('الإجمالي', totalPrice),
-          _kv('التكلفة', totalCost),
-          // _kv('الربح', profit),
-          // Row(
-          //   mainAxisSize: MainAxisSize.min,
-          //   children: [
-          //     IconButton(
-          //       tooltip: 'تعديل',
-          //       onPressed: onEdit,
-          //       icon: const Icon(Icons.edit),
-          //     ),
-          //     IconButton(
-          //       tooltip: 'حذف',
-          //       onPressed: onDelete,
-          //       icon: const Icon(Icons.delete_outline),
-          //     ),
-          //   ],
-          // ),
-        ],
-      ),
+      subtitle: _kv('الإجمالي', totalPrice),
+      // subtitle: Wrap(
+      //   spacing: 10,
+      //   runSpacing: 4,
+      //   crossAxisAlignment: WrapCrossAlignment.center,
+      //   children: [
+      //     _kv('الإجمالي', totalPrice),
+      //     // _kv('التكلفة', totalCost),
+      //     // _kv('الربح', profit),
+      //     // Row(
+      //     //   mainAxisSize: MainAxisSize.min,
+      //     //   children: [
+      //     //     IconButton(
+      //     //       tooltip: 'تعديل',
+      //     //       onPressed: onEdit,
+      //     //       icon: const Icon(Icons.edit),
+      //     //     ),
+      //     //     IconButton(
+      //     //       tooltip: 'حذف',
+      //     //       onPressed: onDelete,
+      //     //       icon: const Icon(Icons.delete_outline),
+      //     //     ),
+      //     //   ],
+      //     // ),
+      //   ],
+      // ),
       children: [
         if (components.isEmpty)
           const ListTile(title: Text('— لا توجد تفاصيل مكونات —'))
@@ -542,7 +543,7 @@ class _SaleTile extends StatelessWidget {
     final qty = _num(c['qty']);
     final grams = _num(c['grams']);
     final price = _num(c['line_total_price']);
-    final cost = _num(c['line_total_cost']);
+    // final cost = _num(c['line_total_cost']);
 
     final label = variant.isNotEmpty ? '$name - $variant' : name;
     final qtyText = grams > 0
@@ -565,10 +566,10 @@ class _SaleTile extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 8),
-          Text(
-            'ت:${cost.toStringAsFixed(2)}',
-            style: const TextStyle(color: Colors.black54),
-          ),
+          // Text(
+          //   'ت:${cost.toStringAsFixed(2)}',
+          //   style: const TextStyle(color: Colors.black54),
+          // ),
         ],
       ),
     );
