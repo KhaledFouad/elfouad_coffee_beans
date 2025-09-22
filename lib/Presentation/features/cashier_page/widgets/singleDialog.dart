@@ -212,15 +212,16 @@ class _SingleDialogState extends State<SingleDialog> {
   Widget _numPad({required bool allowDot}) {
     // أزرار النومباد
     final keys = <String>[
-      '1',
-      '2',
       '3',
-      '4',
-      '5',
+      '2',
+      '1',
       '6',
-      '7',
-      '8',
+      '5',
+      '4',
       '9',
+      '8',
+      '7',
+
       allowDot ? 'dot' : 'clear',
       '0',
       'back',
