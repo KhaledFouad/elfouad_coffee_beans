@@ -737,7 +737,7 @@ class _SingleDialogState extends State<SingleDialog> {
                               '≈ الجرامات المحسوبة: ${_grams.toString()} جم',
                               style: const TextStyle(
                                 color: Colors.black54,
-                                fontSize: 16,
+                                fontSize: 20,
                               ),
                             ),
                           ),
