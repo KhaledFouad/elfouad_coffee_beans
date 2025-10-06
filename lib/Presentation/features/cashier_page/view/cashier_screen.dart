@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/sales/sales_history_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -41,30 +42,16 @@ class CashierHome extends StatelessWidget {
     ];
 
     return Directionality(
-      // يضمن RTL
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: const Color(0xFF543824),
-
-          onPressed: () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SalesHistoryPage()));
-          },
-          icon: const Icon(Icons.receipt_long, color: Colors.white),
-          label: const Text(
-            'سجلّ المبيعات',
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
+        // ==== FAB مع بادچ لعدد عمليات الأجل غير المسددة ====
+        floatingActionButton: _SalesHistoryFabWithBadge(),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
         backgroundColor: const Color(0xFFF5F5F5),
         body: LayoutBuilder(
           builder: (context, constraints) {
-            // عرض المحتوى الأقصى لراحة القراءة على الويب
             final maxW = constraints.maxWidth.clamp(0, 1100.0);
-            // حجم الكارت حسب الشاشة
             final cardW = (maxW / 2).clamp(220.0, 340.0);
             final cardH = cardW * 0.85;
 
@@ -108,6 +95,82 @@ class CashierHome extends StatelessWidget {
   }
 }
 
+/// ==== FAB يُظهِر بادچ بعدد العمليات المؤجلة غير المسددة ====
+class _SalesHistoryFabWithBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final q = FirebaseFirestore.instance
+        .collection('sales')
+        .where('is_deferred', isEqualTo: true)
+        .where('paid', isEqualTo: false);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: q.snapshots(),
+      builder: (context, snap) {
+        final count = snap.hasData ? snap.data!.docs.length : 0;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            FloatingActionButton.extended(
+              backgroundColor: const Color(0xFF543824),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SalesHistoryPage()),
+                );
+              },
+              icon: const Icon(Icons.receipt_long, color: Colors.white),
+              label: const Text(
+                'سجلّ المبيعات',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+            if (count > 0)
+              Positioned(
+                // تحريك بسيط لأعلى/يمين عشان يبان فوق الـ FAB
+                right: -4,
+                top: -4,
+                child: _Badge(count: count),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final int count;
+  const _Badge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = count > 99 ? '99+' : '$count';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 18),
+      decoration: BoxDecoration(
+        color: Colors.redAccent,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 1.5),
+        boxShadow: const [BoxShadow(blurRadius: 4, color: Colors.black26)],
+      ),
+      child: Center(
+        child: Text(
+          text,
+          textScaleFactor: 1.0,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            height: 1.0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CategoryCard extends StatefulWidget {
   final String title;
   final IconData icon;
@@ -134,7 +197,7 @@ class _CategoryCardState extends State<_CategoryCard>
   double _scale = 1.0;
 
   void _setHover(bool hover) {
-    if (!kIsWeb) return; // hover للويب فقط
+    if (!kIsWeb) return;
     setState(() => _scale = hover ? 1.04 : 1.0);
   }
 
@@ -161,14 +224,12 @@ class _CategoryCardState extends State<_CategoryCard>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // الخلفية
                   Image.asset(
                     widget.image,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) =>
                         Container(color: Colors.grey.shade300),
                   ),
-                  // تظليل/جراديانت
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -181,7 +242,6 @@ class _CategoryCardState extends State<_CategoryCard>
                       ),
                     ),
                   ),
-                  // المحتوى
                   Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,

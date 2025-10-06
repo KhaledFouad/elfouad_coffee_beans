@@ -107,8 +107,28 @@ class BlendsPage extends StatelessWidget {
             );
           }
 
-          final items = groups.values.toList();
-
+          // === Custom sort: preferred order first, then alphabetical ===
+          const preferredOrderBlends = <String>[
+            'توليفة القهاوي',
+            'توليفة كلاسيك',
+            'توليفة مخصوص',
+            'توليفة اسبيشيال',
+            'توليفة الفؤاد',
+            'قهوة بندق قطع',
+            'توليفة اسبريسو',
+          ];
+          final rankBlends = <String, int>{
+            for (var i = 0; i < preferredOrderBlends.length; i++)
+              preferredOrderBlends[i]: i,
+          };
+          final items = groups.values.toList()
+            ..sort((a, b) {
+              final ra = rankBlends[a.name] ?? 1 << 20;
+              final rb = rankBlends[b.name] ?? 1 << 20;
+              if (ra != rb) return ra.compareTo(rb);
+              return a.name.compareTo(b.name);
+            });
+          // === End custom sort ===
           return LayoutBuilder(
             builder: (context, c) {
               final max = c.maxWidth;
@@ -142,8 +162,9 @@ class BlendsPage extends StatelessWidget {
                         );
                       } catch (e, st) {
                         logError(e, st);
-                        if (context.mounted)
+                        if (context.mounted) {
                           await showErrorDialog(context, e, st);
+                        }
                       }
                     },
                   );

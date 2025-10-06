@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/blends_models.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class UserFriendly implements Exception {
   final String message;
@@ -28,24 +27,31 @@ class _BlendDialogState extends State<BlendDialog> {
   bool _busy = false;
   String? _fatal;
 
-  // اختيار الدرجة
   late final List<String> _variantOptions;
   String? _variant;
 
-  // إدخال الكمية/السعر (مع نومباد داخلي)
   final TextEditingController _gramsCtrl = TextEditingController();
   final TextEditingController _priceCtrl = TextEditingController();
   InputMode _mode = InputMode.grams;
 
-  // نومباد داخلي
   bool _showPad = false;
   _PadTarget _padTarget = _PadTarget.none;
 
-  // ضيافة وتحويج
-  bool _isComplimentary = false;
-  bool _isSpiced = false;
+  // حالات
+  bool _isComplimentary = false; // ضيافة
+  bool _isDeferred = false; // أجِّل
+  bool _isSpiced = false; // محوّج
 
-  // نكهات ممنوعة من التحويج + فرنساوي
+  // جينسنج (يظهر فقط لو canSpice)
+  int _ginsengGrams = 0;
+  static const double _ginsengPricePerG = 5.0;
+  static const double _ginsengCostPerG = 4.0;
+
+  // من الداتا: تحويج/كجم (سعر/تكلفة) + فلاغ دعم التحويج
+  final Map<String, double> _spicesPricePerKgById = {};
+  final Map<String, double> _spicesCostPerKgById = {};
+  final Map<String, bool> _supportsSpiceById = {};
+
   static const Set<String> _flavored = {
     'قهوة كراميل',
     'قهوة بندق',
@@ -55,9 +61,33 @@ class _BlendDialogState extends State<BlendDialog> {
     'قهوة توت',
     'قهوة فراولة',
     'قهوة مانجو',
+    'شاي',
+    'شاى',
   };
 
-  // ===== Helpers (Parsing) =====
+  // تنافي ضيافة وأجِّل
+  void _setComplimentary(bool v) {
+    setState(() {
+      _isComplimentary = v;
+      if (v) {
+        _isDeferred = false;
+        // ضيافة = صفر، يبقى نقفل إدخال بالسعر
+        if (_mode == InputMode.price) {
+          _mode = InputMode.grams;
+          _priceCtrl.clear();
+          if (_showPad && _padTarget == _PadTarget.price) _closePad();
+        }
+      }
+    });
+  }
+
+  void _setDeferred(bool v) {
+    setState(() {
+      _isDeferred = v;
+      if (v) _isComplimentary = false;
+    });
+  }
+
   int _parseInt(String s) {
     final cleaned = s.replaceAll(RegExp(r'[^0-9]'), '');
     final v = int.tryParse(cleaned) ?? 0;
@@ -75,15 +105,6 @@ class _BlendDialogState extends State<BlendDialog> {
   int get _grams => _parseInt(_gramsCtrl.text);
   double get _inputPrice => _parseDouble(_priceCtrl.text);
 
-  bool get _canSpice {
-    final sel = _selected;
-    if (sel == null) return false;
-    final nm = sel.name.trim();
-    if (nm == 'توليفة فرنساوي') return false;
-    if (_flavored.contains(nm)) return false;
-    return true;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -95,6 +116,31 @@ class _BlendDialogState extends State<BlendDialog> {
             .toList()
           ..sort();
     _variant = _variantOptions.isNotEmpty ? _variantOptions.first : null;
+    _preloadVariantMeta();
+  }
+
+  Future<void> _preloadVariantMeta() async {
+    try {
+      final db = FirebaseFirestore.instance;
+      final futures = <Future<void>>[];
+      for (final v in widget.group.variants.values) {
+        futures.add(
+          db.collection('blends').doc(v.id).get().then((snap) {
+            final m = snap.data();
+            if (m == null) return;
+            _spicesPricePerKgById[v.id] = (m['spicesPrice'] is num)
+                ? (m['spicesPrice'] as num).toDouble()
+                : double.tryParse('${m['spicesPrice'] ?? ''}') ?? 0.0;
+            _spicesCostPerKgById[v.id] = (m['spicesCost'] is num)
+                ? (m['spicesCost'] as num).toDouble()
+                : double.tryParse('${m['spicesCost'] ?? ''}') ?? 0.0;
+            _supportsSpiceById[v.id] = (m['supportsSpice'] == true);
+          }),
+        );
+      }
+      await Future.wait(futures);
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   BlendVariant? get _selected {
@@ -106,45 +152,79 @@ class _BlendDialogState extends State<BlendDialog> {
     return null;
   }
 
-  // ===== Pricing =====
   double get _sellPerKg => _selected?.sellPricePerKg ?? 0.0;
   double get _costPerKg => _selected?.costPricePerKg ?? 0.0;
 
   double get _sellPerG => _sellPerKg / 1000.0;
   double get _costPerG => _costPerKg / 1000.0;
 
-  double get _spiceRatePerKg {
+  bool get _dbSaysCanSpice {
     final sel = _selected;
-    if (!_isSpiced || sel == null) return 0.0;
-    final nm = sel.name.trim();
-    if (nm == 'توليفة فرنساوي') return 0.0;
-    if (_flavored.contains(nm)) return 0.0;
-    return 40.0;
+    if (sel == null) return false;
+    final id = sel.id;
+    return (_supportsSpiceById[id] == true) ||
+        ((_spicesPricePerKgById[id] ?? 0) > 0) ||
+        ((_spicesCostPerKgById[id] ?? 0) > 0);
   }
 
-  double get _spicePerG => _spiceRatePerKg / 1000.0;
+  bool get _canSpice {
+    final sel = _selected;
+    if (sel == null) return false;
+    final nm = sel.name.trim();
+    if (nm == 'توليفة فرنساوي') return false;
+    if (_flavored.contains(nm)) return false;
+    return _dbSaysCanSpice;
+  }
+
+  double get _spicesPricePerKg {
+    final sel = _selected;
+    if (!_isSpiced || sel == null || !_canSpice) return 0.0;
+    return _spicesPricePerKgById[sel.id] ?? 0.0;
+  }
+
+  double get _spicesCostPerKg {
+    final sel = _selected;
+    if (!_isSpiced || sel == null || !_canSpice) return 0.0;
+    return _spicesCostPerKgById[sel.id] ?? 0.0;
+  }
+
+  double get _spicePricePerG => _spicesPricePerKg / 1000.0;
+  double get _spiceCostPerG => _spicesCostPerKg / 1000.0;
 
   int get _gramsEffective {
     if (_mode == InputMode.grams) return _grams;
     if (_isComplimentary) return 0;
-    final perG = _sellPerG + (_isSpiced ? _spicePerG : 0.0);
+    final perG = _sellPerG + (_isSpiced ? _spicePricePerG : 0.0);
     if (perG <= 0) return 0;
     final g = (_inputPrice / perG).floor();
     return g.clamp(0, 1000000);
   }
 
+  // أجزاء السعر/التكلفة (بن + تحويج + جينسنج)
   double get _beansAmount => _sellPerG * _gramsEffective;
-  double get _spiceAmount => _isSpiced ? (_gramsEffective * _spicePerG) : 0.0;
+  double get _spiceAmount =>
+      (_isSpiced && _canSpice) ? (_gramsEffective * _spicePricePerG) : 0.0;
+  double get _ginsengPriceAmount => _ginsengGrams * _ginsengPricePerG;
 
-  double get _pricePerG => _isComplimentary ? 0.0 : _sellPerG;
-  double get _totalPrice =>
-      _isComplimentary ? 0.0 : (_beansAmount + _spiceAmount);
-  double get _totalCost => _costPerG * _gramsEffective;
+  double get _beansCostAmount => _costPerG * _gramsEffective;
+  double get _spiceCostAmount =>
+      (_isSpiced && _canSpice) ? (_gramsEffective * _spiceCostPerG) : 0.0;
+  double get _ginsengCostAmount => _ginsengGrams * _ginsengCostPerG;
 
-  // ===== NumPad (Internal) =====
+  double get _pricePerG => _isComplimentary
+      ? 0.0
+      : (_sellPerG + (_isSpiced && _canSpice ? _spicePricePerG : 0.0));
+
+  double get _totalPrice => _isComplimentary
+      ? 0.0
+      : (_beansAmount + _spiceAmount + _ginsengPriceAmount);
+
+  double get _totalCost =>
+      _beansCostAmount + _spiceCostAmount + _ginsengCostAmount;
+
   void _openPad(_PadTarget target) {
     if (_busy) return;
-    FocusScope.of(context).unfocus(); // امنع كيبورد النظام
+    FocusScope.of(context).unfocus();
     setState(() {
       _padTarget = target;
       _showPad = true;
@@ -161,8 +241,9 @@ class _BlendDialogState extends State<BlendDialog> {
   void _applyPadKey(String k) {
     final ctrl = (_padTarget == _PadTarget.grams) ? _gramsCtrl : _priceCtrl;
     if (k == 'back') {
-      if (ctrl.text.isNotEmpty)
+      if (ctrl.text.isNotEmpty) {
         ctrl.text = ctrl.text.substring(0, ctrl.text.length - 1);
+      }
     } else if (k == 'clear') {
       ctrl.clear();
     } else if (k == 'dot') {
@@ -173,9 +254,9 @@ class _BlendDialogState extends State<BlendDialog> {
       _closePad();
       return;
     } else {
-      ctrl.text += k; // أرقام
+      ctrl.text += k;
     }
-    setState(() {}); // لتحديث الحسابات المشتقة/العرض
+    setState(() {});
   }
 
   Widget _numPad({required bool allowDot}) {
@@ -189,12 +270,10 @@ class _BlendDialogState extends State<BlendDialog> {
       '9',
       '8',
       '7',
-
       allowDot ? 'dot' : 'clear',
       '0',
       'back',
     ];
-
     return LayoutBuilder(
       builder: (context, c) {
         final maxW = c.maxWidth;
@@ -216,7 +295,6 @@ class _BlendDialogState extends State<BlendDialog> {
                   IconData? icon;
                   String label = k;
                   VoidCallback onTap;
-
                   switch (k) {
                     case 'back':
                       icon = Icons.backspace_outlined;
@@ -235,7 +313,6 @@ class _BlendDialogState extends State<BlendDialog> {
                     default:
                       onTap = () => _applyPadKey(k);
                   }
-
                   return SizedBox(
                     width: btnW,
                     height: 52,
@@ -278,7 +355,93 @@ class _BlendDialogState extends State<BlendDialog> {
     );
   }
 
-  // ===== Save =====
+  // كارت توجل موحّد
+  Widget _toggleCard({
+    required String title,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final selectedBg = const Color(0xFF543824);
+    final unselectedBg = Colors.brown.shade50;
+    final selectedBorder = Colors.brown.shade700;
+    final unselectedBorder = Colors.brown.shade100;
+    final selectedText = Colors.white;
+    final unselectedText = const Color(0xFF543824);
+    return Container(
+      decoration: BoxDecoration(
+        color: value ? selectedBg : unselectedBg,
+        border: Border.all(color: value ? selectedBorder : unselectedBorder),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: CheckboxListTile(
+        value: value,
+        onChanged: _busy ? null : (v) => onChanged(v ?? false),
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        controlAffinity: ListTileControlAffinity.leading,
+        title: Text(
+          title,
+          style: TextStyle(
+            color: value ? selectedText : unselectedText,
+            fontWeight: FontWeight.w600,
+            fontSize: 17,
+          ),
+        ),
+        activeColor: Colors.white,
+        checkColor: selectedBg,
+      ),
+    );
+  }
+
+  // كارت الجينسنج (لا يظهر إلا لو canSpice)
+  Widget _ginsengCard() {
+    if (!_canSpice) return const SizedBox.shrink();
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.brown.shade50,
+        border: Border.all(color: Colors.brown.shade100),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          const Text(
+            'جينسنج',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+          ),
+          const Spacer(),
+          IconButton.filledTonal(
+            onPressed: _busy
+                ? null
+                : () {
+                    setState(
+                      () => _ginsengGrams = (_ginsengGrams > 0)
+                          ? _ginsengGrams - 1
+                          : 0,
+                    );
+                  },
+            icon: const Icon(Icons.remove),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              '$_ginsengGrams جم',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ),
+          IconButton.filledTonal(
+            onPressed: _busy
+                ? null
+                : () {
+                    setState(() => _ginsengGrams += 1);
+                  },
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _commitSale() async {
     final sel = _selected;
     if (sel == null) {
@@ -286,14 +449,13 @@ class _BlendDialogState extends State<BlendDialog> {
       await showErrorDialog(context, _fatal!);
       return;
     }
-
     final gramsToSell = _gramsEffective;
     if (gramsToSell <= 0) {
       setState(
         () => _fatal = _mode == InputMode.grams
             ? 'من فضلك أدخل كمية صحيحة بالجرام.'
             : (_isComplimentary
-                  ? 'لا يمكن إدخال بالسعر مع ضيافة. ألغ الضيافة أو أدخل الجرامات.'
+                  ? 'لا يمكن إدخال بالسعر مع ضيافة.'
                   : 'من فضلك أدخل سعرًا صحيحًا.'),
       );
       await showErrorDialog(context, _fatal!);
@@ -316,23 +478,68 @@ class _BlendDialogState extends State<BlendDialog> {
         final data = snap.data() as Map<String, dynamic>;
         final currentStock = (data['stock'] is num)
             ? (data['stock'] as num).toDouble()
-            : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
+            : double.tryParse('${data['stock'] ?? 0}') ?? 0.0;
 
         final need = gramsToSell.toDouble();
         if (currentStock < need) {
-          final avail = currentStock.toStringAsFixed(0);
-          final want = need.toStringAsFixed(0);
           throw UserFriendly(
-            'المخزون غير كافٍ.\nالمتاح: $avail جم • المطلوب: $want جم',
+            'المخزون غير كافٍ.\nالمتاح: ${currentStock.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
           );
         }
 
         final newStock = currentStock - need;
         txn.update(itemRef, {'stock': newStock});
 
+        // fallback لو ما اتحملوش فوق
+        final spicesPricePerKg = (data['spicesPrice'] is num)
+            ? (data['spicesPrice'] as num).toDouble()
+            : double.tryParse('${data['spicesPrice'] ?? ''}') ?? 0.0;
+        final spicesCostPerKg = (data['spicesCost'] is num)
+            ? (data['spicesCost'] as num).toDouble()
+            : double.tryParse('${data['spicesCost'] ?? ''}') ?? 0.0;
+
+        final canSp = _canSpice;
+        final spicePricePerG = (_isSpiced && canSp)
+            ? (spicesPricePerKg / 1000.0)
+            : 0.0;
+        final spiceCostPerG = (_isSpiced && canSp)
+            ? (spicesCostPerKg / 1000.0)
+            : 0.0;
+
+        // مبالغ السعر/التكلفة (بن + تحويج + جينسنج)
+        final beansPriceAmount = _sellPerG * need;
+        final spicePriceAmount = (_isSpiced && canSp)
+            ? (spicePricePerG * need)
+            : 0.0;
+        final ginsengPriceAmount = _isComplimentary
+            ? 0.0
+            : (_ginsengGrams * _ginsengPricePerG);
+
+        final beansCostAmount = _costPerG * need;
+        final spiceCostAmount = (_isSpiced && canSp)
+            ? (spiceCostPerG * need)
+            : 0.0;
+        final ginsengCostAmount = _ginsengGrams * _ginsengCostPerG;
+
+        final isComp = _isComplimentary;
+        final isDef = _isDeferred && !isComp; // لا تؤجَّل الضيافة
+
+        // السعر الحقيقي (لا نصفر للأجل)
+        final wouldTotalPrice = isComp
+            ? 0.0
+            : (beansPriceAmount + spicePriceAmount + ginsengPriceAmount);
+
+        final totalCostOut =
+            beansCostAmount + spiceCostAmount + ginsengCostAmount;
+
+        // الربح الظاهر = 0 لو ضيافة أو أجل غير مدفوع
+        final profitOut = (isDef || isComp)
+            ? 0.0
+            : (wouldTotalPrice - totalCostOut);
+
         final saleRef = db.collection('sales').doc();
         txn.set(saleRef, {
-          'created_at': DateTime.now().toUtc(),
+          'created_at': FieldValue.serverTimestamp(),
           'created_by': 'cashier_web',
           'type': 'ready_blend',
           'item_id': sel.id,
@@ -340,27 +547,44 @@ class _BlendDialogState extends State<BlendDialog> {
           'variant': sel.variant,
           'unit': 'g',
           'grams': need,
-          'is_complimentary': _isComplimentary,
 
-          // بن
-          'price_per_kg': _sellPerKg,
-          'price_per_g': _pricePerG,
-          'beans_amount': _beansAmount,
+          // حالات
+          'is_complimentary': isComp,
+          'is_deferred': isDef,
+          'due_amount': isDef ? wouldTotalPrice : 0.0,
+          'paid': !isDef,
 
           // تحويج
-          'is_spiced': _isSpiced,
-          'spice_rate_per_kg': _spiceRatePerKg,
-          'spice_amount': _spiceAmount,
+          'is_spiced': _isSpiced && canSp,
+          'spice_rate_per_kg': (_isSpiced && canSp) ? spicesPricePerKg : 0.0,
+          'spice_amount': (_isSpiced && canSp) ? spicePriceAmount : 0.0,
+          'spice_cost_per_kg': (_isSpiced && canSp) ? spicesCostPerKg : 0.0,
+          'spice_cost_amount': (_isSpiced && canSp) ? spiceCostAmount : 0.0,
 
-          // إجمالي
-          'total_price': _totalPrice,
+          // أسعار/تكاليف (نصفّر السعر فقط في الضيافة—not الأجل)
+          'price_per_kg': _sellPerKg,
+          'price_per_g': isComp
+              ? 0.0
+              : (_sellPerG + ((_isSpiced && canSp) ? spicePricePerG : 0.0)),
+          'beans_amount': beansPriceAmount,
 
-          // تكاليف
+          // جينسنج
+          'ginseng_grams': _ginsengGrams,
+          'ginseng_price_per_g': _ginsengPricePerG,
+          'ginseng_cost_per_g': _ginsengCostPerG,
+          'ginseng_price_amount': isComp ? 0.0 : ginsengPriceAmount,
+          'ginseng_cost_amount': ginsengCostAmount,
+
           'cost_per_kg': _costPerKg,
-          'cost_per_g': _costPerG,
-          'total_cost': _totalCost,
+          'cost_per_g':
+              _costPerG + ((_isSpiced && canSp) ? spiceCostPerG : 0.0),
+          'total_cost': totalCostOut,
 
-          'profit_total': _totalPrice - _totalCost,
+          // إجمالي/ربح
+          'total_price': wouldTotalPrice, // ✅ لا نصفر في الأجل
+          'profit_total': profitOut,
+          'profit_expected': (wouldTotalPrice - totalCostOut),
+
           'stock_after': newStock,
         });
       });
@@ -417,8 +641,7 @@ class _BlendDialogState extends State<BlendDialog> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
-          clipBehavior:
-              Clip.antiAlias, // علشان النومباد يفضل جوّا حدود الديالوج
+          clipBehavior: Clip.antiAlias,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: SingleChildScrollView(
@@ -487,7 +710,6 @@ class _BlendDialogState extends State<BlendDialog> {
                                 final stock = v?.stock ?? double.infinity;
                                 final disabled = stock <= 0;
                                 final label = disabled ? '$r (غير متاح)' : r;
-
                                 return ChoiceChip(
                                   label: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -511,7 +733,10 @@ class _BlendDialogState extends State<BlendDialog> {
                                           if (!vSel) return;
                                           setState(() {
                                             _variant = r;
-                                            if (!_canSpice) _isSpiced = false;
+                                            if (!_canSpice) {
+                                              _isSpiced = false;
+                                              _ginsengGrams = 0;
+                                            }
                                           });
                                         },
                                   materialTapTargetSize:
@@ -538,77 +763,44 @@ class _BlendDialogState extends State<BlendDialog> {
                           const SizedBox(height: 12),
                         ],
 
-                        // ضيافة
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.brown.shade50,
-                            border: Border.all(color: Colors.brown.shade100),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: CheckboxListTile(
-                            value: _isComplimentary,
-                            onChanged: _busy
-                                ? null
-                                : (v) => setState(() {
-                                    _isComplimentary = v ?? false;
-                                    if (_isComplimentary &&
-                                        _mode == InputMode.price) {
-                                      _mode = InputMode.grams;
-                                      _priceCtrl.clear();
-                                      if (_showPad &&
-                                          _padTarget == _PadTarget.price) {
-                                        _closePad();
-                                      }
-                                    }
-                                  }),
-                            dense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                            ),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: const Text(
-                              'ضيافة',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 17,
+                        // === محوّج + ضيافة + أجِّل (صف واحد) ===
+                        Row(
+                          children: [
+                            if (_canSpice) ...[
+                              Expanded(
+                                child: _toggleCard(
+                                  title: 'محوّج',
+                                  value: _isSpiced,
+                                  onChanged: (v) =>
+                                      setState(() => _isSpiced = v),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              child: _toggleCard(
+                                title: 'ضيافة',
+                                value: _isComplimentary,
+                                onChanged: (v) => _setComplimentary(v),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _toggleCard(
+                                title: 'أجِّل',
+                                value: _isDeferred,
+                                onChanged: (v) => _setDeferred(v),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
 
-                        // محوّج (يختفي لو مش مسموح)
-                        if (_canSpice)
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.brown.shade50,
-                              border: Border.all(color: Colors.brown.shade100),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: CheckboxListTile(
-                              value: _isSpiced,
-                              onChanged: _busy
-                                  ? null
-                                  : (v) =>
-                                        setState(() => _isSpiced = v ?? false),
-                              dense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              controlAffinity: ListTileControlAffinity.leading,
-                              title: const Text(
-                                'محوّج',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 17,
-                                ),
-                              ),
-                            ),
-                          ),
+                        // === جينسنج (فقط لو canSpice) ===
+                        _ginsengCard(),
+                        if (_canSpice) const SizedBox(height: 12),
 
-                        const SizedBox(height: 12),
-
-                        // اختيار وضع الإدخال
+                        // وضع الإدخال
                         Align(
                           alignment: Alignment.center,
                           child: SegmentedButton<InputMode>(
@@ -633,14 +825,15 @@ class _BlendDialogState extends State<BlendDialog> {
                                             _isComplimentary)
                                         ? InputMode.grams
                                         : s.first;
-                                    // قفل النومباد لو الهدف اتغير
                                     if (_showPad) {
                                       if (_padTarget == _PadTarget.price &&
-                                          _mode != InputMode.price)
+                                          _mode != InputMode.price) {
                                         _closePad();
+                                      }
                                       if (_padTarget == _PadTarget.grams &&
-                                          _mode != InputMode.grams)
+                                          _mode != InputMode.grams) {
                                         _closePad();
+                                      }
                                     }
                                   }),
                             showSelectedIcon: false,
@@ -648,7 +841,6 @@ class _BlendDialogState extends State<BlendDialog> {
                         ),
                         const SizedBox(height: 12),
 
-                        // إدخال (readOnly + onTap يفتح النومباد)
                         if (_mode == InputMode.grams) ...[
                           Align(
                             alignment: Alignment.centerRight,
@@ -766,7 +958,7 @@ class _BlendDialogState extends State<BlendDialog> {
                           _WarningBox(text: _fatal!),
                         ],
 
-                        // النومباد جوّا الديالوج
+                        // النومباد
                         AnimatedSize(
                           duration: const Duration(milliseconds: 160),
                           curve: Curves.easeOut,
@@ -851,7 +1043,6 @@ class _KVRow extends StatelessWidget {
   final double v;
   final String? suffix;
   const _KVRow({required this.k, required this.v, this.suffix});
-
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -867,7 +1058,6 @@ class _KVRow extends StatelessWidget {
 class _WarningBox extends StatelessWidget {
   final String text;
   const _WarningBox({required this.text});
-
   @override
   Widget build(BuildContext context) {
     return Container(

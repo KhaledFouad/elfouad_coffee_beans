@@ -1,7 +1,7 @@
 // lib/Presentation/features/cashier_page/view/custom_blends_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class UserFriendly implements Exception {
   final String message;
@@ -10,9 +10,13 @@ class UserFriendly implements Exception {
   String toString() => message;
 }
 
-/// ====== موديل صنف منفرد ======
+/// مصدر الصنف (Singles أو Blends)
+enum ItemSource { singles, blends }
+
+/// ====== موديل صنف (منفرد أو توليفة جاهزة) موحد ======
 class SingleVariantItem {
   final String id;
+  final ItemSource source;
   final String name;
   final String variant; // قد تكون ""
   final String image;
@@ -27,6 +31,7 @@ class SingleVariantItem {
 
   SingleVariantItem({
     required this.id,
+    required this.source,
     required this.name,
     required this.variant,
     required this.image,
@@ -41,13 +46,33 @@ class SingleVariantItem {
     return double.tryParse(v?.toString() ?? '0') ?? 0.0;
   }
 
-  factory SingleVariantItem.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
+  factory SingleVariantItem.fromSinglesDoc(
+    DocumentSnapshot<Map<String, dynamic>> d,
+  ) {
     final m = d.data() ?? {};
     return SingleVariantItem(
       id: d.id,
+      source: ItemSource.singles,
       name: (m['name'] ?? '').toString(),
       variant: (m['variant'] ?? '').toString(),
       image: (m['image'] ?? 'assets/singles.jpg').toString(),
+      sellPricePerKg: _readNum(m['sellPricePerKg']),
+      costPricePerKg: _readNum(m['costPricePerKg']),
+      stock: _readNum(m['stock']),
+      unit: (m['unit'] ?? 'g').toString(),
+    );
+  }
+
+  factory SingleVariantItem.fromBlendsDoc(
+    DocumentSnapshot<Map<String, dynamic>> d,
+  ) {
+    final m = d.data() ?? {};
+    return SingleVariantItem(
+      id: d.id,
+      source: ItemSource.blends,
+      name: (m['name'] ?? '').toString(),
+      variant: (m['variant'] ?? '').toString(),
+      image: (m['image'] ?? 'assets/blends.jpg').toString(),
       sellPricePerKg: _readNum(m['sellPricePerKg']),
       costPricePerKg: _readNum(m['costPricePerKg']),
       stock: _readNum(m['stock']),
@@ -72,6 +97,7 @@ class _BlendLine {
     final perG = item!.sellPerG;
     if (perG <= 0) return 0;
     return (price / perG).floor().clamp(0, 1000000);
+    // السعر هنا يعتبر "بن" فقط بدون تحويج إضافي (نفس منطق الملف القديم)
   }
 
   double get linePrice {
@@ -99,11 +125,17 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   bool _busy = false;
   String? _fatal;
 
-  List<SingleVariantItem> _allSingles = [];
+  List<SingleVariantItem> _allItems = []; // Singles + Blends (محددة)
   final List<_BlendLine> _lines = [_BlendLine()];
 
-  bool _isComplimentary = false;
-  bool _isSpiced = false; // 50ج/كجم على إجمالي الوزن
+  bool _isComplimentary = false; // ضيافة
+  bool _isDeferred = false; // أجِّل
+  bool _isSpiced = false; // 50ج/كجم على إجمالي الوزن (زي القديم)
+
+  // جينسنج (على إجمالي الجرامات)
+  int _ginsengGrams = 0;
+  static const double _ginsengPricePerG = 5.0;
+  static const double _ginsengCostPerG = 4.0;
 
   // إجماليات
   double get _sumPriceLines =>
@@ -113,8 +145,20 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   double get _spiceRatePerKg => _isSpiced ? 50.0 : 0.0;
   double get _spiceAmount =>
       _isSpiced ? (_sumGrams / 1000.0) * _spiceRatePerKg : 0.0;
-  double get _totalPrice =>
-      _isComplimentary ? 0.0 : (_sumPriceLines + _spiceAmount);
+
+  double get _ginsengPriceAmount => _ginsengGrams * _ginsengPricePerG;
+  double get _ginsengCostAmount => _ginsengGrams * _ginsengCostPerG;
+
+  double get _totalPriceWould =>
+      _sumPriceLines + _spiceAmount + _ginsengPriceAmount;
+
+  // قيمة واجهة المستخدم (العرض على الشاشة)
+  // صفر فقط في حالة الضيافة
+  double get _uiTotal => _isComplimentary ? 0.0 : _totalPriceWould;
+
+  // (اختياري) لو محتاج في أي مكان تاني
+  // ده إجمالي “الخروج” لو عايز تعتمد عليه، لكنه غير مستخدم في الحفظ
+  double get _totalPriceOutUi => _uiTotal;
 
   // ===== نومباد داخلي للصفحة كلها =====
   bool _showPad = false;
@@ -198,7 +242,6 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
       '9',
       '8',
       '7',
-
       allowDot ? 'dot' : 'clear',
       '0',
       'back',
@@ -290,29 +333,52 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   @override
   void initState() {
     super.initState();
-    _loadSingles();
+    _loadItems();
   }
 
-  Future<void> _loadSingles() async {
+  /// تحميل العناصر المنفردة + بعض التوليفات الجاهزة بأسمائها المحددة
+  Future<void> _loadItems() async {
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('singles')
-          .orderBy('name')
-          .get();
+      final db = FirebaseFirestore.instance;
 
-      final all = snap.docs.map(SingleVariantItem.fromDoc).toList();
+      // singles
+      final singlesSnap = await db.collection('singles').orderBy('name').get();
+      final singles = singlesSnap.docs
+          .map(SingleVariantItem.fromSinglesDoc)
+          .toList();
+
+      // blends (محددة بالأسماء + كل درجات التحميص)
+      const allowedBlendNames = {
+        'توليفة كلاسيك',
+        'توليفة مخصوص',
+        'توليفة اسبيشيال',
+        'توليفة الفؤاد',
+        'توليفة القهاوى',
+      };
+
+      final blendsSnap = await db
+          .collection('blends')
+          .where('name', whereIn: allowedBlendNames.toList())
+          .get();
+      final blends = blendsSnap.docs
+          .map(SingleVariantItem.fromBlendsDoc)
+          .toList();
+
+      final all = <SingleVariantItem>[...singles, ...blends];
+
+      // ترتيب: المتاح أولاً
       all.sort((a, b) {
         final az = a.stock <= 0 ? 1 : 0;
         final bz = b.stock <= 0 ? 1 : 0;
-        if (az != bz) return az.compareTo(bz); // المتاح الأول
+        if (az != bz) return az.compareTo(bz);
         return a.fullLabel.compareTo(b.fullLabel);
       });
 
       setState(() {
-        _allSingles = all;
+        _allItems = all;
       });
     } catch (e) {
-      setState(() => _fatal = 'تعذر تحميل الأصناف المنفردة.');
+      setState(() => _fatal = 'تعذر تحميل الأصناف.');
     }
   }
 
@@ -325,7 +391,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   }
 
   Future<void> _commitSale() async {
-    if (_allSingles.isEmpty) {
+    if (_allItems.isEmpty) {
       setState(() => _fatal = 'لم يتم تحميل الأصناف بعد.');
       return;
     }
@@ -343,27 +409,34 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
     try {
       await db.runTransaction((txn) async {
-        final Map<String, int> gramsById = {};
-        final Map<String, double> currentStockById = {};
+        final Map<String, int> gramsBySinglesId = {};
+        final Map<String, int> gramsByBlendsId = {};
+        final Map<String, double> currentStockSingles = {};
+        final Map<String, double> currentStockBlends = {};
 
+        // تجميع احتياجات الجرامات حسب المصدر
         for (final l in _lines) {
           final it = l.item!;
-          gramsById[it.id] = (gramsById[it.id] ?? 0) + l.gramsEffective;
+          final g = l.gramsEffective;
+          if (it.source == ItemSource.singles) {
+            gramsBySinglesId[it.id] = (gramsBySinglesId[it.id] ?? 0) + g;
+          } else {
+            gramsByBlendsId[it.id] = (gramsByBlendsId[it.id] ?? 0) + g;
+          }
         }
 
-        for (final entry in gramsById.entries) {
+        // تحقق المخزون: singles
+        for (final entry in gramsBySinglesId.entries) {
           final id = entry.key;
           final need = entry.value.toDouble();
           final ref = db.collection('singles').doc(id);
           final snap = await txn.get(ref);
-          if (!snap.exists) {
-            throw UserFriendly('صنف غير موجود (docId=$id).');
-          }
+          if (!snap.exists)
+            throw UserFriendly('صنف منفرد غير موجود (docId=$id).');
           final data = snap.data() as Map<String, dynamic>;
           final cur = (data['stock'] is num)
               ? (data['stock'] as num).toDouble()
               : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
-
           if (cur < need) {
             final nm = (data['name'] ?? '').toString();
             final vr = (data['variant'] ?? '').toString();
@@ -372,63 +445,120 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
               'المخزون غير كافٍ لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
             );
           }
-          currentStockById[id] = cur;
+          currentStockSingles[id] = cur;
         }
 
-        for (final entry in gramsById.entries) {
+        // تحقق المخزون: blends
+        for (final entry in gramsByBlendsId.entries) {
           final id = entry.key;
           final need = entry.value.toDouble();
-          final cur = currentStockById[id]!;
+          final ref = db.collection('blends').doc(id);
+          final snap = await txn.get(ref);
+          if (!snap.exists)
+            throw UserFriendly('توليفة غير موجودة (docId=$id).');
+          final data = snap.data() as Map<String, dynamic>;
+          final cur = (data['stock'] is num)
+              ? (data['stock'] as num).toDouble()
+              : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
+          if (cur < need) {
+            final nm = (data['name'] ?? '').toString();
+            final vr = (data['variant'] ?? '').toString();
+            final label = vr.isNotEmpty ? '$nm - $vr' : nm;
+            throw UserFriendly(
+              'المخزون غير كافٍ لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
+            );
+          }
+          currentStockBlends[id] = cur;
+        }
+
+        // خصم المخزون
+        for (final entry in gramsBySinglesId.entries) {
+          final id = entry.key;
+          final need = entry.value.toDouble();
+          final cur = currentStockSingles[id]!;
           final ref = db.collection('singles').doc(id);
           txn.update(ref, {'stock': cur - need});
         }
+        for (final entry in gramsByBlendsId.entries) {
+          final id = entry.key;
+          final need = entry.value.toDouble();
+          final cur = currentStockBlends[id]!;
+          final ref = db.collection('blends').doc(id);
+          txn.update(ref, {'stock': cur - need});
+        }
 
-        final components = _lines.map((l) {
-          final it = l.item!;
-          final g = l.gramsEffective;
-          final pricePerG = _isComplimentary ? 0.0 : it.sellPerG;
-          final costPerG = it.costPerG;
-          return {
-            'item_id': it.id,
-            'name': it.name,
-            'variant': it.variant,
-            'unit': 'g',
-            'grams': g.toDouble(),
+        final isComp = _isComplimentary;
+        final isDef = _isDeferred && !isComp; // لا تؤجَّل الضيافة
 
-            'price_per_kg': it.sellPricePerKg,
-            'price_per_g': pricePerG,
-            'line_total_price': pricePerG * g,
+        // السعر الحقيقي (دائمًا نحفظه كما هو — الأجل ما يصفّروش)
+        final double totalPriceWould = isComp ? 0.0 : _totalPriceWould;
 
-            'cost_per_kg': it.costPricePerKg,
-            'cost_per_g': costPerG,
-            'line_total_cost': costPerG * g,
-          };
-        }).toList();
-
-        final double totalCost = _lines.fold<double>(
+        // التكلفة (بن + جينسنج) — التحويج في الصفحة دي سعر فقط
+        final double totalBeansCost = _lines.fold<double>(
           0.0,
           (s, l) => s + (l.item!.costPerG * l.gramsEffective),
         );
+        final double totalSpiceCost = 0.0;
+        final double totalCost =
+            totalBeansCost + totalSpiceCost + _ginsengCostAmount;
 
-        final double totalPrice = _totalPrice;
-        final double profit = totalPrice - totalCost;
+        // الربح الظاهر: صفر لو ضيافة أو أجل غير مدفوع
+        final double profitOut = (isComp || isDef)
+            ? 0.0
+            : (totalPriceWould - totalCost);
+
+        // مكونات الفاتورة: السعر/جرام واللاين توتال يتصفّروا فقط في الضيافة
+        final components = _lines.map((l) {
+          final it = l.item!;
+          final g = l.gramsEffective.toDouble();
+          final pricePerGOut = isComp ? 0.0 : it.sellPerG;
+          return {
+            'item_id': it.id,
+            'source': it.source == ItemSource.singles ? 'singles' : 'blends',
+            'name': it.name,
+            'variant': it.variant,
+            'unit': 'g',
+            'grams': g,
+            'price_per_kg': it.sellPricePerKg,
+            'price_per_g': pricePerGOut,
+            'line_total_price': pricePerGOut * g,
+            'cost_per_kg': it.costPricePerKg,
+            'cost_per_g': it.costPerG,
+            'line_total_cost': it.costPerG * g,
+          };
+        }).toList();
 
         final saleRef = db.collection('sales').doc();
         txn.set(saleRef, {
           'created_at': DateTime.now().toUtc(),
           'created_by': 'cashier_web',
           'type': 'custom_blend',
-          'is_complimentary': _isComplimentary,
 
+          // حالات
+          'is_complimentary': isComp,
+          'is_deferred': isDef,
+          'due_amount': isDef ? totalPriceWould : 0.0,
+          'paid': !isDef,
+
+          // ملخص
           'lines_amount': _sumPriceLines,
           'is_spiced': _isSpiced,
           'spice_rate_per_kg': _spiceRatePerKg,
           'spice_amount': _spiceAmount,
-          'total_grams': _sumGrams.toDouble(),
-          'total_price': totalPrice,
 
+          // جينسنج
+          'ginseng_grams': _ginsengGrams,
+          'ginseng_price_per_g': _ginsengPricePerG,
+          'ginseng_cost_per_g': _ginsengCostPerG,
+          'ginseng_price_amount': isComp ? 0.0 : _ginsengPriceAmount,
+          'ginseng_cost_amount': _ginsengCostAmount,
+
+          'total_grams': _sumGrams.toDouble(),
+
+          'total_price': totalPriceWould, // ✅ لا نصفر في الأجل
           'total_cost': totalCost,
-          'profit_total': profit,
+          'profit_total': profitOut,
+          'profit_expected': (totalPriceWould - totalCost),
 
           'components': components,
         });
@@ -464,6 +594,21 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
     }
   }
 
+  // تنافي ضيافة وأجِّل
+  void _setComplimentary(bool v) {
+    setState(() {
+      _isComplimentary = v;
+      if (v) _isDeferred = false;
+    });
+  }
+
+  void _setDeferred(bool v) {
+    setState(() {
+      _isDeferred = v;
+      if (v) _isComplimentary = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 1000;
@@ -471,9 +616,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
     return AnimatedPadding(
       duration: const Duration(milliseconds: 160),
       curve: Curves.easeOut,
-      padding: EdgeInsets.only(
-        bottom: 12, // نومباد داخلي مش كيبورد النظام
-      ),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         appBar: PreferredSize(
@@ -515,7 +658,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             ),
           ),
         ),
-        body: _allSingles.isEmpty
+        body: _allItems.isEmpty
             ? const Center(child: CircularProgressIndicator())
             : LayoutBuilder(
                 builder: (context, c) {
@@ -557,7 +700,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                             key: ValueKey('line_$idx'),
                             padding: const EdgeInsets.only(bottom: 12),
                             child: _LineCard(
-                              singles: _allSingles,
+                              items: _allItems,
                               line: line,
                               onChanged: () => setState(() {}),
                               onRemove: _lines.length == 1 || _busy
@@ -578,7 +721,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                               ),
                             ),
                           );
-                        }).toList(),
+                        }),
                         if (_fatal != null) ...[
                           const SizedBox(height: 8),
                           _WarningBox(text: _fatal!),
@@ -604,16 +747,33 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                       isComplimentary: _isComplimentary,
                       onComplimentaryChanged: _busy
                           ? null
-                          : (v) =>
-                                setState(() => _isComplimentary = v ?? false),
+                          : (v) => _setComplimentary(v ?? false),
+                      isDeferred: _isDeferred,
+                      onDeferredChanged: _busy
+                          ? null
+                          : (v) => _setDeferred(v ?? false),
                       isSpiced: _isSpiced,
                       onSpicedChanged: _busy
                           ? null
                           : (v) => setState(() => _isSpiced = v ?? false),
+                      ginsengGrams: _ginsengGrams,
+                      onGinsengMinus: _busy
+                          ? null
+                          : () => setState(() {
+                              _ginsengGrams = (_ginsengGrams > 0)
+                                  ? _ginsengGrams - 1
+                                  : 0;
+                            }),
+                      onGinsengPlus: _busy
+                          ? null
+                          : () => setState(() => _ginsengGrams += 1),
                       totalGrams: _sumGrams,
-                      totalPrice: _totalPrice,
                       beansAmount: _sumPriceLines,
                       spiceAmount: _spiceAmount,
+                      ginsengAmount: _isComplimentary
+                          ? 0.0
+                          : _ginsengPriceAmount,
+                      totalPrice: _uiTotal,
                     ),
                   );
 
@@ -689,7 +849,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
 /// ====== كارت سطر ======
 class _LineCard extends StatelessWidget {
-  final List<SingleVariantItem> singles;
+  final List<SingleVariantItem> items; // Singles + Blends
   final _BlendLine line;
   final VoidCallback onChanged;
   final VoidCallback? onRemove;
@@ -698,7 +858,7 @@ class _LineCard extends StatelessWidget {
   final VoidCallback onTapPrice;
 
   const _LineCard({
-    required this.singles,
+    required this.items,
     required this.line,
     required this.onChanged,
     required this.onTapGrams,
@@ -713,13 +873,16 @@ class _LineCard extends StatelessWidget {
     final dropdown = DropdownButtonFormField<SingleVariantItem>(
       isExpanded: true,
       value: line.item,
-      items: singles.map((it) {
+      items: items.map((it) {
         final outOfStock = it.stock <= 0;
+        final prefix = it.source == ItemSource.blends ? '' : ''; // تمييز بسيط
         return DropdownMenuItem<SingleVariantItem>(
           value: it,
           enabled: !outOfStock,
           child: Text(
-            outOfStock ? '${it.fullLabel} (غير متاح)' : it.fullLabel,
+            outOfStock
+                ? '$prefix${it.fullLabel} (غير متاح)'
+                : '$prefix${it.fullLabel}',
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
             style: TextStyle(
@@ -734,12 +897,15 @@ class _LineCard extends StatelessWidget {
           ),
         );
       }).toList(),
-      selectedItemBuilder: (ctx) => singles.map((it) {
+      selectedItemBuilder: (ctx) => items.map((it) {
         final outOfStock = it.stock <= 0;
+        final prefix = it.source == ItemSource.blends ? '【توليفة】 ' : '';
         return Align(
           alignment: Alignment.centerRight,
           child: Text(
-            outOfStock ? '${it.fullLabel} (غير متاح)' : it.fullLabel,
+            outOfStock
+                ? '$prefix${it.fullLabel} (غير متاح)'
+                : '$prefix${it.fullLabel}',
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
             style: TextStyle(
@@ -943,23 +1109,38 @@ class _KVBox extends StatelessWidget {
 class _TotalsCard extends StatelessWidget {
   final bool isComplimentary;
   final ValueChanged<bool?>? onComplimentaryChanged;
+
+  final bool isDeferred;
+  final ValueChanged<bool?>? onDeferredChanged;
+
   final bool isSpiced;
   final ValueChanged<bool?>? onSpicedChanged;
-  final int totalGrams;
-  final double totalPrice;
 
+  final int ginsengGrams;
+  final VoidCallback? onGinsengMinus;
+  final VoidCallback? onGinsengPlus;
+
+  final int totalGrams;
   final double beansAmount;
   final double spiceAmount;
+  final double ginsengAmount;
+  final double totalPrice;
 
   const _TotalsCard({
     required this.isComplimentary,
     required this.onComplimentaryChanged,
+    required this.isDeferred,
+    required this.onDeferredChanged,
     required this.isSpiced,
     required this.onSpicedChanged,
+    required this.ginsengGrams,
+    required this.onGinsengMinus,
+    required this.onGinsengPlus,
     required this.totalGrams,
-    required this.totalPrice,
     required this.beansAmount,
     required this.spiceAmount,
+    required this.ginsengAmount,
+    required this.totalPrice,
   });
 
   @override
@@ -971,25 +1152,78 @@ class _TotalsCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            CheckboxListTile(
-              value: isComplimentary,
-              onChanged: onComplimentaryChanged,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('ضيافة'),
+            // — ضيافة + أجِّل (متعارضين) في صف واحد —
+            Row(
+              children: [
+                Expanded(
+                  child: ToggleCard(
+                    title: 'ضيافة',
+                    value: isComplimentary,
+                    onChanged: (v) => onComplimentaryChanged?.call(v),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ToggleCard(
+                    title: 'أجِّل',
+                    value: isDeferred,
+                    onChanged: (v) => onDeferredChanged?.call(v),
+                  ),
+                ),
+              ],
             ),
-            CheckboxListTile(
+            const SizedBox(height: 12),
+            // — محوّج —
+            ToggleCard(
+              title: 'محوّج',
               value: isSpiced,
-              onChanged: onSpicedChanged,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('محوّج'),
+              onChanged: (v) => onSpicedChanged?.call(v),
             ),
-            const SizedBox(height: 8),
+
+            // — جينسنج —
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.brown.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.brown.shade100),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    'جينسنج',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  IconButton.filledTonal(
+                    onPressed: onGinsengMinus,
+                    icon: const Icon(Icons.remove),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      '$ginsengGrams جم',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                    onPressed: onGinsengPlus,
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
             _row('إجمالي الجرامات', '$totalGrams جم'),
             const SizedBox(height: 6),
             _row('سعر البن', beansAmount.toStringAsFixed(2)),
             _row('سعر التحويج', spiceAmount.toStringAsFixed(2)),
+            _row('سعر الجينسنج', ginsengAmount.toStringAsFixed(2)),
             const Divider(height: 18),
             _row('الإجمالي', totalPrice.toStringAsFixed(2)),
           ],

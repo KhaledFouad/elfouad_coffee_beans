@@ -23,8 +23,9 @@ String prettyError(Object error, [StackTrace? st]) {
   }
 
   if (error is FormatException) return error.message;
-  if (error is AssertionError)
+  if (error is AssertionError) {
     return error.message?.toString() ?? 'Assertion error';
+  }
 
   // على الويب: جرّب تقرأ خصائص message/code إن كانت جايّة من JS
   if (kIsWeb) {

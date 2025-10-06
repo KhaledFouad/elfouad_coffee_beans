@@ -2,7 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'toggle_card.dart'; // الكارد المعاد استخدامه
 
 enum Serving { single, dbl }
 
@@ -21,13 +21,10 @@ class DrinkDialog extends StatefulWidget {
 }
 
 class _DrinkDialogState extends State<DrinkDialog> {
+  bool _isDeferred = false; // أجّل
   bool _busy = false;
   String? _fatal;
   int _qty = 1;
-
-  // Roast
-  late final List<String> _roastOptions;
-  String? _roast;
 
   // Serving (سنجل/دوبل) للتركي/اسبريسو فقط
   Serving _serving = Serving.single;
@@ -39,85 +36,123 @@ class _DrinkDialogState extends State<DrinkDialog> {
   bool get _isCoffeeMix => _name.trim() == 'كوفي ميكس';
   String _mix = 'water'; // water | milk
 
+  // --------- Utilities ---------
+  String _norm(String s) => s.replaceAll('ى', 'ي').trim();
+  bool _isNum(dynamic v) =>
+      v is num || double.tryParse(v?.toString() ?? '') != null;
+  double _numOf(dynamic v, [double def = 0.0]) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '') ?? def;
+  }
+
   // --------- getters آمنة ---------
   String get _name => (widget.drinkData['name'] ?? '').toString();
   String get _image =>
       (widget.drinkData['image'] ?? 'assets/drinks.jpg').toString();
   String get _unit => (widget.drinkData['unit'] ?? 'cup').toString();
 
-  double get _sellPriceBase {
-    final v = widget.drinkData['sellPrice'];
-    if (v is num) return v.toDouble();
-    return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  double get _sellPriceBase => _numOf(widget.drinkData['sellPrice']);
+
+  // ==== Spice option (Turkish only) ====
+  bool _spiced = false;
+
+  bool get _isTurkish {
+    final n = _norm(_name);
+    return n == _norm('قهوة تركي');
   }
 
-  double get _costPriceSingle {
-    final v = widget.drinkData['costPrice'];
-    if (v is num) return v.toDouble();
-    return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  // ==== دوال تساعد على تنافي "ضيافة" و"أجِّل" ====
+  void _setComplimentary(bool v) {
+    setState(() {
+      _isComplimentary = v;
+      if (v) _isDeferred = false; // تنافي
+    });
   }
 
-  // تكلفة الدوبل (لو متسجلة في الداتا نستخدمها، وإلا fallback)
-  double get _doubleCostPrice {
-    final v = widget.drinkData['doubleCostPrice'];
-    if (v is num) return v.toDouble();
-    return double.tryParse(v?.toString() ?? '') ?? (_costPriceSingle * 2.0);
+  void _setDeferred(bool v) {
+    setState(() {
+      _isDeferred = v;
+      if (v) _isComplimentary = false; // تنافي
+    });
   }
 
-  double get _doubleDiscount {
-    final v = widget.drinkData['doubleDiscount'];
-    if (v is num) return v.toDouble();
-    return double.tryParse(v?.toString() ?? '') ?? 10.0; // default 10
+  double get _spicedCupCost =>
+      _numOf(widget.drinkData['spicedCupCost'], _costPriceSingle);
+
+  // تكلفة سنجل أساسية
+  double get _costPriceSingle => _numOf(widget.drinkData['costPrice']);
+
+  // حقول الدبل الجديدة
+  double get _doublePrice => _numOf(widget.drinkData['doublePrice']);
+  double get _doubleCostNew {
+    final v = widget.drinkData['doubleCost'];
+    if (_isNum(v)) return _numOf(v);
+    return _numOf(widget.drinkData['doubleCostPrice']);
   }
+
+  // استهلاك الدبل (لو متوفر)، غير كده هنضرب usedAmount × 2
+  double get _doubleUsedAmount => _numOf(widget.drinkData['doubleUsedAmount']);
+
+  // تكلفة الدوبل fallback قديم لو مفيش doubleCost
+  double get _doubleCostFallback =>
+      _numOf(widget.drinkData['doubleCostPrice'], _costPriceSingle * 2.0);
+
+  // خصم الدبل القديم (لو احتجناه لسعر fallback)
+  double get _doubleDiscount =>
+      _numOf(widget.drinkData['doubleDiscount'], 10.0);
 
   bool get _supportsServingChoice =>
-      _name == 'قهوة تركي' || _name == 'قهوة اسبريسو';
+      _norm(_name) == _norm('قهوة تركي') ||
+      _norm(_name) == _norm('قهوة اسبريسو');
 
+  // أسعار الكوفي ميكس (اختياري)
   double get _coffeeMixUnitPrice {
     final mix = widget.drinkData['mixOptions'] as Map<String, dynamic>?;
-    final water = ((mix?['waterPrice'] ?? 15) as num).toDouble();
-    final milk = ((mix?['milkPrice'] ?? 25) as num).toDouble();
+    final water = _numOf(mix?['waterPrice'], 15);
+    final milk = _numOf(mix?['milkPrice'], 25);
     return _mix == 'milk' ? milk : water;
   }
 
+  // سعر الوحدة النهائي
   double get _unitPriceEffective {
     if (_isComplimentary) return 0.0;
     if (_isCoffeeMix) return _coffeeMixUnitPrice;
+
     if (_supportsServingChoice && _serving == Serving.dbl) {
-      return (_sellPriceBase * 2.0) - _doubleDiscount;
+      return _doublePrice > 0
+          ? _doublePrice
+          : (_sellPriceBase * 2.0) - _doubleDiscount;
     }
     return _sellPriceBase;
   }
 
-  // ✅ تكلفة الدوبل للتركي = 11 (إن لم تُحدد بالداتا)
-  double get _unitCostEffective {
-    if (_supportsServingChoice && _serving == Serving.dbl) {
-      if (_name == 'قهوة تركي') {
-        final fromData = widget.drinkData['doubleCostPrice'];
-        if (fromData is num) return fromData.toDouble();
-        return 11.0;
-      }
-      return _doubleCostPrice;
+  // تكلفة سنجل/دبل
+  double get _unitCostFinal {
+    final isDouble = _supportsServingChoice && _serving == Serving.dbl;
+
+    if (!isDouble) {
+      if (_isTurkish && _spiced) return _spicedCupCost;
+      return _costPriceSingle;
     }
-    return _costPriceSingle;
+
+    if (_isTurkish) {
+      if (_spiced) {
+        final spicedDoubleCupCost = _numOf(
+          widget.drinkData['spicedDoubleCupCost'],
+        );
+        if (spicedDoubleCupCost > 0) return spicedDoubleCupCost;
+        if (_spicedCupCost > 0) return _spicedCupCost * 2.0;
+      }
+      if (_doubleCostNew > 0) return _doubleCostNew;
+      return _doubleCostFallback;
+    }
+
+    if (_doubleCostNew > 0) return _doubleCostNew;
+    return _doubleCostFallback;
   }
 
   double get _totalPrice => _unitPriceEffective * _qty;
-  double get _totalCost => _unitCostEffective * _qty;
-
-  @override
-  void initState() {
-    super.initState();
-    final rawLevels = widget.drinkData['roastLevels'];
-    _roastOptions = (rawLevels is List)
-        ? rawLevels
-              .map((e) => (e ?? '').toString().trim())
-              .where((s) => s.isNotEmpty)
-              .toSet()
-              .toList()
-        : const <String>[];
-    _roast = _roastOptions.isNotEmpty ? _roastOptions.first : null;
-  }
+  double get _totalCost => _unitCostFinal * _qty;
 
   Future<void> _commitSale() async {
     if (_name.isEmpty) {
@@ -126,59 +161,151 @@ class _DrinkDialogState extends State<DrinkDialog> {
       return;
     }
 
-    setState(() {
-      _busy = true;
-      _fatal = null;
-    });
-
+    setState(() => _busy = true);
     try {
       final db = FirebaseFirestore.instance;
-      final ref = db.collection('sales').doc();
 
-      await ref.set({
-        'type': 'drink',
-        'created_at': DateTime.now().toUtc(),
-        'created_by': 'cashier_web',
+      final usedAmountRaw = widget.drinkData['usedAmount'];
+      final usedAmount = _isNum(usedAmountRaw) ? _numOf(usedAmountRaw) : null;
 
-        'drink_id': widget.drinkId,
-        'name': _name,
-        'unit': _unit,
-        'quantity': _qty,
-        'roast': _roast ?? '',
-        'serving': _supportsServingChoice
-            ? (_serving == Serving.dbl ? 'double' : 'single')
-            : 'single',
-        'is_complimentary': _isComplimentary,
+      final isDouble = _supportsServingChoice && _serving == Serving.dbl;
+      final perUnitConsumption = (usedAmount == null || usedAmount <= 0)
+          ? 0.0
+          : (isDouble
+                ? (_doubleUsedAmount > 0 ? _doubleUsedAmount : usedAmount * 2.0)
+                : usedAmount);
 
-        if (_isCoffeeMix) 'mix_base': _mix,
-        if (_isCoffeeMix) 'mix_unit_price': _coffeeMixUnitPrice,
+      final totalConsumption = perUnitConsumption * _qty;
 
-        // أسعار
-        'list_price': _sellPriceBase,
-        'unit_price': _unitPriceEffective,
-        'total_price': _totalPrice,
+      final sourceBlendId = (widget.drinkData['sourceBlendId'] ?? '')
+          .toString()
+          .trim();
 
-        // تكاليف
-        'list_cost': _costPriceSingle,
-        'unit_cost': _unitCostEffective,
-        'total_cost': _totalCost,
+      final sourceBlendNameRaw = (widget.drinkData['sourceBlendName'] ?? '')
+          .toString()
+          .trim();
 
-        'profit_total': _totalPrice - _totalCost,
+      const Map<String, String> sourceBlendOverrides = {
+        'قهوة اسبريسو': 'توليفة اسبريسو',
+        'شاي': 'شاي كيني',
+        'شاى': 'شاي كيني',
+      };
+
+      String resolvedSourceBlendName = sourceBlendNameRaw.isNotEmpty
+          ? sourceBlendNameRaw
+          : (sourceBlendOverrides[_norm(_name)] ?? _name);
+
+      DocumentReference<Map<String, dynamic>>? blendRef;
+      if (totalConsumption > 0) {
+        if (sourceBlendId.isNotEmpty) {
+          blendRef = db.collection('blends').doc(sourceBlendId);
+        } else {
+          final byName = await db
+              .collection('blends')
+              .where('name', isEqualTo: resolvedSourceBlendName)
+              .limit(1)
+              .get();
+          if (byName.docs.isNotEmpty) {
+            blendRef = byName.docs.first.reference;
+          } else {
+            throw Exception(
+              'مصدر الاستهلاك غير موجود: "$resolvedSourceBlendName"',
+            );
+          }
+        }
+      }
+
+      final saleRef = db.collection('sales').doc();
+
+      await db.runTransaction((tx) async {
+        if (blendRef != null) {
+          final snap = await tx.get(blendRef);
+          if (!snap.exists) {
+            throw Exception('مصدر الاستهلاك غير موجود في المخزون.');
+          }
+          final data = snap.data()!;
+          final currentStock = _numOf(data['stock']);
+          if (currentStock < totalConsumption) {
+            throw Exception(
+              'المخزون غير كافي في "${data['name'] ?? resolvedSourceBlendName}"',
+            );
+          }
+          tx.update(blendRef, {'stock': currentStock - totalConsumption});
+        }
+
+        // قبل: كان بيصفّر total_price لو أجل
+        final isComp = _isComplimentary;
+        final isDeferred = _isDeferred && !isComp; // الضيافة لا تؤجل
+        final unitCost = _unitCostFinal;
+        final totalCost = unitCost * _qty;
+
+        // احسب السعر الحقيقي
+        final wouldTotalPrice = _isComplimentary ? 0.0 : _totalPrice;
+        final profitExpected = wouldTotalPrice - totalCost;
+        final unitPriceOut = isComp ? 0.0 : _unitPriceEffective;
+        final totalPriceOut = (isComp || isDeferred) ? 0.0 : _totalPrice;
+        final profitOut = (isComp || isDeferred)
+            ? 0.0
+            : (totalCost > 0 ? (_totalPrice - totalCost) : 0.0);
+
+        tx.set(saleRef, {
+          'type': 'drink',
+          'drinkId': widget.drinkId,
+          'name': _name,
+          'drinkName': _name,
+          'image': _image,
+          'unit': _unit,
+          'serving': _supportsServingChoice
+              ? (_serving == Serving.dbl ? 'double' : 'single')
+              : 'single',
+          'quantity': _qty,
+
+          'unit_price': unitPriceOut,
+          'total_price': wouldTotalPrice, // ⬅️ مش بنصفّر في الأجل
+          'total_cost': totalCost,
+          'profit_total': (isComp || isDeferred) ? 0.0 : profitExpected,
+          'is_deferred': isDeferred,
+          'paid': isDeferred ? false : true, // ⬅️ الأجل يطلع غير مدفوع
+          'due_amount': isDeferred ? wouldTotalPrice : 0.0,
+          'list_cost': _costPriceSingle,
+          'unit_cost': unitCost,
+
+          'is_complimentary': isComp,
+          'spiced': _isTurkish ? _spiced : false,
+          'cost_basis': (_isTurkish && _spiced)
+              ? (_supportsServingChoice && _serving == Serving.dbl
+                    ? 'spicedDoubleCupCost'
+                    : 'spicedCupCost')
+              : (_supportsServingChoice && _serving == Serving.dbl
+                    ? 'doubleCost'
+                    : 'costPrice'),
+
+          'consumption': (totalConsumption > 0)
+              ? {
+                  'sourceBlendId': blendRef?.id,
+                  'sourceBlendName': resolvedSourceBlendName,
+                  'usedAmountPerUnit': isDouble
+                      ? (_doubleUsedAmount > 0
+                            ? _doubleUsedAmount
+                            : (usedAmount ?? 0.0) * 2.0)
+                      : (usedAmount ?? 0.0),
+                  'serving': _serving == Serving.dbl ? 'double' : 'single',
+                  'totalConsumed': totalConsumption,
+                }
+              : null,
+
+          'voided': false,
+          'created_at': FieldValue.serverTimestamp(),
+        });
       });
 
       if (!mounted) return;
-
-      // ارجع للهوم
       final nav = Navigator.of(context, rootNavigator: true);
       nav.pop();
       nav.pushNamedAndRemoveUntil('/', (r) => false);
-      ScaffoldMessenger.of(
-        nav.context,
-      ).showSnackBar(const SnackBar(content: Text('تم تسجيل البيع')));
     } catch (e, st) {
       logError(e, st);
-      if (!mounted) return;
-      await showErrorDialog(context, e, st);
+      if (mounted) await showErrorDialog(context, e, st);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -186,7 +313,6 @@ class _DrinkDialogState extends State<DrinkDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // منع تغطية الكيبورد + سكرول
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
@@ -309,34 +435,43 @@ class _DrinkDialogState extends State<DrinkDialog> {
                           const SizedBox(height: 12),
                         ],
 
-                        // ضيافة
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.brown.shade50,
-                            border: Border.all(color: Colors.brown.shade100),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: CheckboxListTile(
-                            value: _isComplimentary,
-                            onChanged: _busy
-                                ? null
-                                : (v) => setState(
-                                    () => _isComplimentary = v ?? false,
-                                  ),
-                            dense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                            ),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: const Text(
-                              'ضيافة',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 17,
+                        // === Toggles row ===
+                        Row(
+                          children: [
+                            if (_isTurkish) ...[
+                              Expanded(
+                                child: ToggleCard(
+                                  title: 'محوّج',
+                                  value: _spiced,
+                                  onChanged: _busy
+                                      ? (_) {}
+                                      : (v) => setState(() => _spiced = v),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              child: ToggleCard(
+                                title: 'ضيافة',
+                                value: _isComplimentary,
+                                onChanged: _busy
+                                    ? (_) {}
+                                    : (v) => _setComplimentary(v),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ToggleCard(
+                                title: 'أجِّل',
+                                value: _isDeferred,
+                                onChanged: _busy
+                                    ? (_) {}
+                                    : (v) => _setDeferred(v),
+                              ),
+                            ),
+                          ],
                         ),
+
                         const SizedBox(height: 12),
 
                         // سعر الكوب

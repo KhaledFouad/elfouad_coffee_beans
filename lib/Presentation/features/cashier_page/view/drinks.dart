@@ -88,6 +88,28 @@ class DrinksPage extends StatelessWidget {
                 data: {...data, 'unit': unit, 'sellPrice': sellPrice},
               );
             }).toList();
+
+            // === Custom sort: preferred order first, then alphabetical ===
+            const preferredOrderDrinks = <String>[
+              'قهوة تركي',
+              'قهوة اسبريسو',
+              'قهوة فرنساوي',
+              'قهوة بندق قطع',
+              'قهوة كراميل',
+              'شاي',
+              'كوفي ميكس',
+            ];
+            final rankDrinks = <String, int>{
+              for (var i = 0; i < preferredOrderDrinks.length; i++)
+                preferredOrderDrinks[i]: i,
+            };
+            items.sort((a, b) {
+              final ra = rankDrinks[a.name] ?? 1 << 20;
+              final rb = rankDrinks[b.name] ?? 1 << 20;
+              if (ra != rb) return ra.compareTo(rb);
+              return a.name.compareTo(b.name);
+            });
+            // === End custom sort ===
           } catch (e, st) {
             logError(e, st);
             WidgetsBinding.instance.addPostFrameCallback((_) {

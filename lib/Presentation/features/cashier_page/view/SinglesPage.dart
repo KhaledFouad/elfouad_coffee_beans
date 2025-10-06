@@ -140,8 +140,9 @@ class SinglesPage extends StatelessWidget {
                         );
                       } catch (e, st) {
                         logError(e, st);
-                        if (context.mounted)
+                        if (context.mounted) {
                           await showErrorDialog(context, e, st);
+                        }
                       }
                     },
                   );
