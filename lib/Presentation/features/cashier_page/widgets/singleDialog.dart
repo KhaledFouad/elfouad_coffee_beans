@@ -547,7 +547,9 @@ class _SingleDialogState extends State<SingleDialog> {
             : (beansPriceAmount + spicePriceAmount + ginsengPriceAmount);
         final totalCostOut =
             beansCostAmount + spiceCostAmount + ginsengCostAmount;
-        final profitExpected = wouldTotalPrice - totalCostOut;
+        final profitExpected = (isComp || isDeferred)
+            ? 0.0
+            : wouldTotalPrice - totalCostOut;
         final totalPriceNormal =
             beansPriceAmount + spicePriceAmount + ginsengPriceAmount;
 
