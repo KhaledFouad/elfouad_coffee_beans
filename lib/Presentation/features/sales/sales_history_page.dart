@@ -332,8 +332,8 @@ class _SaleTile extends StatelessWidget {
             const SizedBox(width: 6),
             _chip(
               label: 'أجل',
-              border: Colors.indigo.shade200,
-              fill: Colors.indigo.shade50,
+              border: Colors.red.shade200,
+              fill: Colors.red.shade50,
             ),
           ],
           if (isDeferred && paid) ...[
@@ -357,7 +357,7 @@ class _SaleTile extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           _kv('الإجمالي', totalPrice),
-          if (isDeferred && !paid && dueAmount > 0) _kv('مستحق', dueAmount),
+          // if (isDeferred && !paid && dueAmount > 0) _kv('مستحق', dueAmount),
         ],
       ),
       children: [
@@ -378,7 +378,7 @@ class _SaleTile extends StatelessWidget {
               child: FilledButton.icon(
                 style: ButtonStyle(
                   backgroundColor: WidgetStateProperty.all(
-                    const Color(0xFF2E7D32),
+                    const Color(0xFF543824),
                   ),
                 ),
                 onPressed: () async {
@@ -391,12 +391,31 @@ class _SaleTile extends StatelessWidget {
                       ),
                       actions: [
                         TextButton(
+                          style: ButtonStyle(
+                            backgroundColor: WidgetStateProperty.all(
+                              const Color.fromARGB(255, 242, 240, 240),
+                            ),
+                            foregroundColor: WidgetStateProperty.all(
+                              Colors.brown,
+                            ),
+                            overlayColor: WidgetStateProperty.all(
+                              Colors.brown.shade50,
+                            ),
+                          ),
                           onPressed: () => Navigator.pop(context, false),
-                          child: const Text('إلغاء'),
+                          child: const Text(
+                            'إلغاء',
+                            style: TextStyle(color: Colors.brown),
+                          ),
                         ),
                         FilledButton(
+                          style: ButtonStyle(
+                            backgroundColor: WidgetStateProperty.all(
+                              const Color(0xFF543824),
+                            ),
+                          ),
                           onPressed: () => Navigator.pop(context, true),
-                          child: const Text('تم الدفع'),
+                          child: const Text('تأكيد'),
                         ),
                       ],
                     ),

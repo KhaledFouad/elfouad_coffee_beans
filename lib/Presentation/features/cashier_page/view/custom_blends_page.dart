@@ -25,6 +25,11 @@ class SingleVariantItem {
   final double stock; // جرام
   final String unit; // "g"
 
+  // التحويج من الداتابيز
+  final double spicesPricePerKg; // سعر التحويج/كجم
+  final double spicesCostPerKg; // تكلفة التحويج/كجم
+  final bool supportsSpice; // يدعم التحويج؟
+
   String get fullLabel => variant.isNotEmpty ? '$name - $variant' : name;
   double get sellPerG => sellPricePerKg / 1000.0;
   double get costPerG => costPricePerKg / 1000.0;
@@ -39,12 +44,17 @@ class SingleVariantItem {
     required this.costPricePerKg,
     required this.stock,
     required this.unit,
+    required this.spicesPricePerKg,
+    required this.spicesCostPerKg,
+    required this.supportsSpice,
   });
 
   static double _readNum(dynamic v) {
     if (v is num) return v.toDouble();
     return double.tryParse(v?.toString() ?? '0') ?? 0.0;
   }
+
+  static bool _readBool(dynamic v) => v == true;
 
   factory SingleVariantItem.fromSinglesDoc(
     DocumentSnapshot<Map<String, dynamic>> d,
@@ -60,6 +70,12 @@ class SingleVariantItem {
       costPricePerKg: _readNum(m['costPricePerKg']),
       stock: _readNum(m['stock']),
       unit: (m['unit'] ?? 'g').toString(),
+      spicesPricePerKg: _readNum(m['spicesPrice']),
+      spicesCostPerKg: _readNum(m['spicesCost']),
+      supportsSpice:
+          _readBool(m['supportsSpice']) ||
+          _readNum(m['spicesPrice']) > 0 ||
+          _readNum(m['spicesCost']) > 0,
     );
   }
 
@@ -77,6 +93,12 @@ class SingleVariantItem {
       costPricePerKg: _readNum(m['costPricePerKg']),
       stock: _readNum(m['stock']),
       unit: (m['unit'] ?? 'g').toString(),
+      spicesPricePerKg: _readNum(m['spicesPrice']),
+      spicesCostPerKg: _readNum(m['spicesCost']),
+      supportsSpice:
+          _readBool(m['supportsSpice']) ||
+          _readNum(m['spicesPrice']) > 0 ||
+          _readNum(m['spicesCost']) > 0,
     );
   }
 }
@@ -97,7 +119,7 @@ class _BlendLine {
     final perG = item!.sellPerG;
     if (perG <= 0) return 0;
     return (price / perG).floor().clamp(0, 1000000);
-    // السعر هنا يعتبر "بن" فقط بدون تحويج إضافي (نفس منطق الملف القديم)
+    // السعر هنا يعتبر "بن" فقط بدون تحويج إضافي
   }
 
   double get linePrice {
@@ -130,7 +152,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
   bool _isComplimentary = false; // ضيافة
   bool _isDeferred = false; // أجِّل
-  bool _isSpiced = false; // 50ج/كجم على إجمالي الوزن (زي القديم)
+  bool _isSpiced = false; // التحويج على إجمالي التوليفة
 
   // جينسنج (على إجمالي الجرامات)
   int _ginsengGrams = 0;
@@ -142,9 +164,50 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
       _lines.fold<double>(0, (s, l) => s + l.linePrice);
   int get _sumGrams => _lines.fold<int>(0, (s, l) => s + l.gramsEffective);
 
-  double get _spiceRatePerKg => _isSpiced ? 50.0 : 0.0;
-  double get _spiceAmount =>
-      _isSpiced ? (_sumGrams / 1000.0) * _spiceRatePerKg : 0.0;
+  // هل أي مكوّن يدعم التحويج؟
+  bool get _canSpiceAny {
+    for (final l in _lines) {
+      final it = l.item;
+      if (it != null && it.supportsSpice) return true;
+    }
+    return false;
+  }
+
+  // التحويج من الداتابيز — نجمع حسب كل مكوّن
+  double get _spiceAmount {
+    if (!_isSpiced) return 0.0;
+    double sum = 0.0;
+    for (final l in _lines) {
+      final it = l.item;
+      if (it == null || !it.supportsSpice) continue;
+      sum += (l.gramsEffective / 1000.0) * it.spicesPricePerKg;
+    }
+    return sum;
+  }
+
+  double get _spiceCostAmount {
+    if (!_isSpiced) return 0.0;
+    double sum = 0.0;
+    for (final l in _lines) {
+      final it = l.item;
+      if (it == null || !it.supportsSpice) continue;
+      sum += (l.gramsEffective / 1000.0) * it.spicesCostPerKg;
+    }
+    return sum;
+  }
+
+  // متوسط سعر/كجم تحويج فعلي (للتخزين كملخص)
+  double get _effectiveSpiceRatePerKg {
+    final gKg = _sumGrams / 1000.0;
+    if (!_isSpiced || gKg <= 0) return 0.0;
+    return _spiceAmount / gKg;
+  }
+
+  double get _effectiveSpiceCostPerKg {
+    final gKg = _sumGrams / 1000.0;
+    if (!_isSpiced || gKg <= 0) return 0.0;
+    return _spiceCostAmount / gKg;
+  }
 
   double get _ginsengPriceAmount => _ginsengGrams * _ginsengPricePerG;
   double get _ginsengCostAmount => _ginsengGrams * _ginsengCostPerG;
@@ -155,10 +218,6 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   // قيمة واجهة المستخدم (العرض على الشاشة)
   // صفر فقط في حالة الضيافة
   double get _uiTotal => _isComplimentary ? 0.0 : _totalPriceWould;
-
-  // (اختياري) لو محتاج في أي مكان تاني
-  // ده إجمالي “الخروج” لو عايز تعتمد عليه، لكنه غير مستخدم في الحفظ
-  double get _totalPriceOutUi => _uiTotal;
 
   // ===== نومباد داخلي للصفحة كلها =====
   bool _showPad = false;
@@ -431,8 +490,9 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           final need = entry.value.toDouble();
           final ref = db.collection('singles').doc(id);
           final snap = await txn.get(ref);
-          if (!snap.exists)
+          if (!snap.exists) {
             throw UserFriendly('صنف منفرد غير موجود (docId=$id).');
+          }
           final data = snap.data() as Map<String, dynamic>;
           final cur = (data['stock'] is num)
               ? (data['stock'] as num).toDouble()
@@ -454,8 +514,9 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           final need = entry.value.toDouble();
           final ref = db.collection('blends').doc(id);
           final snap = await txn.get(ref);
-          if (!snap.exists)
+          if (!snap.exists) {
             throw UserFriendly('توليفة غير موجودة (docId=$id).');
+          }
           final data = snap.data() as Map<String, dynamic>;
           final cur = (data['stock'] is num)
               ? (data['stock'] as num).toDouble()
@@ -493,12 +554,12 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
         // السعر الحقيقي (دائمًا نحفظه كما هو — الأجل ما يصفّروش)
         final double totalPriceWould = isComp ? 0.0 : _totalPriceWould;
 
-        // التكلفة (بن + جينسنج) — التحويج في الصفحة دي سعر فقط
+        // التكلفة (بن + تحويج + جينسنج)
         final double totalBeansCost = _lines.fold<double>(
           0.0,
           (s, l) => s + (l.item!.costPerG * l.gramsEffective),
         );
-        final double totalSpiceCost = 0.0;
+        final double totalSpiceCost = _spiceCostAmount; // من الداتابيز
         final double totalCost =
             totalBeansCost + totalSpiceCost + _ginsengCostAmount;
 
@@ -507,11 +568,19 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             ? 0.0
             : (totalPriceWould - totalCost);
 
-        // مكونات الفاتورة: السعر/جرام واللاين توتال يتصفّروا فقط في الضيافة
+        // مكونات الفاتورة
         final components = _lines.map((l) {
           final it = l.item!;
           final g = l.gramsEffective.toDouble();
           final pricePerGOut = isComp ? 0.0 : it.sellPerG;
+          // معدلات التحويج الخاصة بالمكوّن
+          final compSpiceRate = (isComp || !_isSpiced || !it.supportsSpice)
+              ? 0.0
+              : it.spicesPricePerKg;
+          final compSpiceCostRate = (isComp || !_isSpiced || !it.supportsSpice)
+              ? 0.0
+              : it.spicesCostPerKg;
+
           return {
             'item_id': it.id,
             'source': it.source == ItemSource.singles ? 'singles' : 'blends',
@@ -525,12 +594,15 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             'cost_per_kg': it.costPricePerKg,
             'cost_per_g': it.costPerG,
             'line_total_cost': it.costPerG * g,
+            // معلومات تحويج لكل مكوّن (اختياري لكنها مفيدة)
+            'spice_rate_per_kg': compSpiceRate,
+            'spice_cost_per_kg': compSpiceCostRate,
           };
         }).toList();
 
         final saleRef = db.collection('sales').doc();
         txn.set(saleRef, {
-          'created_at': DateTime.now().toUtc(),
+          'created_at': FieldValue.serverTimestamp(),
           'created_by': 'cashier_web',
           'type': 'custom_blend',
 
@@ -542,9 +614,12 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
           // ملخص
           'lines_amount': _sumPriceLines,
-          'is_spiced': _isSpiced,
-          'spice_rate_per_kg': _spiceRatePerKg,
-          'spice_amount': _spiceAmount,
+          'is_spiced': _isSpiced && _canSpiceAny,
+          // المتوسطات الفعلية على إجمالي الوزن
+          'spice_rate_per_kg': _effectiveSpiceRatePerKg,
+          'spice_amount': isComp ? 0.0 : _spiceAmount,
+          'spice_cost_per_kg': _effectiveSpiceCostPerKg,
+          'spice_cost_amount': _spiceCostAmount,
 
           // جينسنج
           'ginseng_grams': _ginsengGrams,
@@ -752,8 +827,8 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                       onDeferredChanged: _busy
                           ? null
                           : (v) => _setDeferred(v ?? false),
-                      isSpiced: _isSpiced,
-                      onSpicedChanged: _busy
+                      isSpiced: _isSpiced && _canSpiceAny,
+                      onSpicedChanged: _busy || !_canSpiceAny
                           ? null
                           : (v) => setState(() => _isSpiced = v ?? false),
                       ginsengGrams: _ginsengGrams,
@@ -769,7 +844,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                           : () => setState(() => _ginsengGrams += 1),
                       totalGrams: _sumGrams,
                       beansAmount: _sumPriceLines,
-                      spiceAmount: _spiceAmount,
+                      spiceAmount: _isComplimentary ? 0.0 : _spiceAmount,
                       ginsengAmount: _isComplimentary
                           ? 0.0
                           : _ginsengPriceAmount,
@@ -875,7 +950,7 @@ class _LineCard extends StatelessWidget {
       value: line.item,
       items: items.map((it) {
         final outOfStock = it.stock <= 0;
-        final prefix = it.source == ItemSource.blends ? '' : ''; // تمييز بسيط
+        final prefix = it.source == ItemSource.blends ? '' : '';
         return DropdownMenuItem<SingleVariantItem>(
           value: it,
           enabled: !outOfStock,

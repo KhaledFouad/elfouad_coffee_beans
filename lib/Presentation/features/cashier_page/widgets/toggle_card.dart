@@ -83,7 +83,7 @@ class ToggleCard extends StatelessWidget {
               if (leadingIcon != null) ...[
                 Icon(
                   leadingIcon,
-                  size: 18,
+                  size: 16,
                   color: value ? (selectedText!) : (unselectedText!),
                 ),
                 const SizedBox(width: 6),
@@ -94,8 +94,8 @@ class ToggleCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: value ? (selectedText!) : (unselectedText!),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15, // صغير وموحّد
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12, // صغير وموحّد
                   ),
                 ),
               ),
@@ -111,7 +111,7 @@ class ToggleCard extends StatelessWidget {
                     color: value
                         ? (selectedText!).withOpacity(0.9)
                         : (unselectedText!).withOpacity(0.9),
-                    fontSize: 12,
+                    fontSize: 14,
                   ),
                 ),
 
