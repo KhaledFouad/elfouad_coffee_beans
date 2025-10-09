@@ -383,8 +383,8 @@ class _BlendDialogState extends State<BlendDialog> {
           title,
           style: TextStyle(
             color: value ? selectedText : unselectedText,
-            fontWeight: FontWeight.w600,
-            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            fontSize: 13,
           ),
         ),
         activeColor: Colors.white,
