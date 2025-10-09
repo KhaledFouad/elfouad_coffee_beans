@@ -1,4 +1,6 @@
 // lib/Presentation/features/cashier_page/widgets/DrinkDialog.dart
+// ignore_for_file: unused_local_variable, unused_element
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';

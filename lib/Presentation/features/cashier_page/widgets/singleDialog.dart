@@ -1,6 +1,9 @@
 // lib/Presentation/features/cashier_page/widgets/singleDialog.dart
+// ignore_for_file: unused_local_variable, unused_element
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 
@@ -377,43 +380,6 @@ class _SingleDialogState extends State<SingleDialog> {
   }
 
   // === كروت التبديل بنفس ديزاين المشروبات ===
-  Widget _toggleCard({
-    required String title,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    final selectedBg = const Color(0xFF543824);
-    final unselectedBg = Colors.brown.shade50;
-    final selectedBorder = Colors.brown.shade700;
-    final unselectedBorder = Colors.brown.shade100;
-    final selectedText = Colors.white;
-    final unselectedText = const Color(0xFF543824);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: value ? selectedBg : unselectedBg,
-        border: Border.all(color: value ? selectedBorder : unselectedBorder),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: CheckboxListTile(
-        value: value,
-        onChanged: _busy ? null : (v) => onChanged(v ?? false),
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        controlAffinity: ListTileControlAffinity.leading,
-        title: Text(
-          title,
-          style: TextStyle(
-            color: value ? selectedText : unselectedText,
-            fontWeight: FontWeight.w900,
-            fontSize: 13,
-          ),
-        ),
-        activeColor: Colors.white,
-        checkColor: selectedBg,
-      ),
-    );
-  }
 
   Widget _ginsengCard() {
     // يظهر فقط لو الصنف بيدعم التحويج (canSpice)
@@ -791,7 +757,7 @@ class _SingleDialogState extends State<SingleDialog> {
                           children: [
                             if (_canSpice) ...[
                               Expanded(
-                                child: _toggleCard(
+                                child: ToggleCard(
                                   title: 'محوّج',
                                   value: _isSpiced,
                                   onChanged: (v) =>
@@ -801,7 +767,7 @@ class _SingleDialogState extends State<SingleDialog> {
                               const SizedBox(width: 12),
                             ],
                             Expanded(
-                              child: _toggleCard(
+                              child: ToggleCard(
                                 title: 'ضيافة',
                                 value: _isComplimentary,
                                 onChanged: (v) => _setComplimentary(v),
@@ -809,7 +775,7 @@ class _SingleDialogState extends State<SingleDialog> {
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: _toggleCard(
+                              child: ToggleCard(
                                 title: 'أجِّل',
                                 value: _isDeferred,
                                 onChanged: (v) => _setDeferred(v),
