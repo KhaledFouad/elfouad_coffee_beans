@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/extras_page.dart'
+    show ExtrasPage;
 import 'package:elfouad_coffee_beans/Presentation/features/sales/sales_history_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -32,6 +34,12 @@ class CashierHome extends StatelessWidget {
         "icon": FontAwesomeIcons.cubes,
         "image": "assets/blends.jpg",
         "builder": (BuildContext _) => const BlendsPage(),
+      },
+      {
+        "title": "معمول و تمر",
+        "icon": FontAwesomeIcons.cookie,
+        "image": "assets/cookies.png",
+        "builder": (BuildContext _) => const ExtrasPage(),
       },
       {
         "title": "توليفات العميل",
