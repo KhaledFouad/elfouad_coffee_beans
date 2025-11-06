@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/cashier_screen.dart';
-import 'package:elfouad_coffee_beans/data/datasources/seed_biscuits.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'
@@ -31,7 +29,7 @@ Future<void> main() async {
           (Object error, StackTrace stack) {
             debugPrint('⚠️ Uncaught async error: $error');
             debugPrint(stack.toString());
-            return true; // مايقفلش الأب
+            return true;
           };
 
       await Firebase.initializeApp(

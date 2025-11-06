@@ -533,6 +533,11 @@ class _SaleTile extends StatelessWidget {
     );
   }
 
+  static String _toArabicUnit(String u) {
+    if (u.trim().toLowerCase() == 'piece') return 'قطعة';
+    return u;
+  }
+
   static String _titleLine(Map<String, dynamic> m, String type) {
     String name = (m['name'] ?? '').toString();
     String variant = (m['variant'] ?? m['roast'] ?? '').toString();
@@ -558,6 +563,11 @@ class _SaleTile extends StatelessWidget {
         return 'توليفة جاهزة - $g2 جم ${lbl2.isNotEmpty ? lbl2 : ''}'.trim();
       case 'custom_blend':
         return 'توليفة العميل';
+      case 'extra':
+        final q = _num(m['quantity'] ?? m['qty'] ?? 1).toStringAsFixed(0);
+        final en = (m['extra_name'] ?? m['name'] ?? 'سناكس').toString();
+        final unit = _toArabicUnit((m['unit'] ?? 'piece').toString());
+        return 'سناكس - $q $unit $en';
       default:
         return 'عملية';
     }
@@ -587,7 +597,7 @@ class _SaleTile extends StatelessWidget {
     final label = variant.isNotEmpty ? '$name - $variant' : name;
     final qtyText = grams > 0
         ? '${grams.toStringAsFixed(0)} جم'
-        : (qty > 0 ? '$qty ${unit.isEmpty ? "" : unit}' : '');
+        : (qty > 0 ? '$qty ${unit.isEmpty ? "" : _toArabicUnit(unit)}' : '');
 
     return ListTile(
       dense: true,
@@ -619,6 +629,8 @@ class _SaleTile extends StatelessWidget {
         return Icons.blender_outlined;
       case 'custom_blend':
         return Icons.auto_awesome_mosaic;
+      case 'extra':
+        return Icons.cookie_rounded;
       default:
         return Icons.receipt_long;
     }
@@ -676,6 +688,7 @@ bool _sameMinute(DateTime a, DateTime b) {
 /// - drink: سطر واحد بعدد الأكواب
 /// - single / ready_blend: سطر واحد بالجرامات
 /// - custom_blend: نقرأ القائمة كما هي
+/// - extra: سطر واحد بعدد القطع
 List<Map<String, dynamic>> _extractComponents(
   Map<String, dynamic> m,
   String type,
@@ -724,6 +737,28 @@ List<Map<String, dynamic>> _extractComponents(
         'unit': 'g',
         'line_total_price': totalPrice,
         'line_total_cost': totalCost,
+      },
+    ];
+  }
+
+  if (type == 'extra') {
+    final name = (m['extra_name'] ?? m['name'] ?? 'سناكس').toString();
+    final variant = (m['variant'] ?? '').toString();
+    final qty = _num(m['quantity'] ?? m['qty'] ?? 1);
+    final unit = (m['unit'] ?? 'piece').toString();
+    final unitPrice = _num(m['unit_price']);
+    final unitCost = _num(m['unit_cost']);
+    final totalPrice = _num(m['total_price']);
+    final totalCost = _num(m['total_cost']);
+    return [
+      {
+        'name': name,
+        'variant': variant,
+        'qty': qty,
+        'unit': unit,
+        'grams': 0,
+        'line_total_price': totalPrice > 0 ? totalPrice : unitPrice * qty,
+        'line_total_cost': totalCost > 0 ? totalCost : unitCost * qty,
       },
     ];
   }
@@ -840,7 +875,10 @@ Future<void> settleDeferredSale(String saleId) async {
 
 String _detectType(Map<String, dynamic> m) {
   final t = (m['type'] ?? '').toString();
-  if (t.isNotEmpty) return t;
+  if (t.isNotEmpty) {
+    if (t == 'extra') return 'extra';
+    return t;
+  }
 
   if (m.containsKey('components')) return 'custom_blend';
 
@@ -852,6 +890,9 @@ String _detectType(Map<String, dynamic> m) {
   }
   if (m.containsKey('blend_id') || m.containsKey('blend_name')) {
     return 'ready_blend';
+  }
+  if (m.containsKey('extra_id') || m.containsKey('extra_name')) {
+    return 'extra';
   }
 
   final items = _asListMap(m['items']);

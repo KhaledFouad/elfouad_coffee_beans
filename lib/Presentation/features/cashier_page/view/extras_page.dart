@@ -364,7 +364,7 @@ Future<void> _sellExtraTransaction(
     await db.runTransaction((tx) async {
       final snap = await tx.get(ref);
       if (!snap.exists) throw 'الصنف غير موجود';
-      final data = snap.data() as Map<String, dynamic>? ?? {};
+      final data = snap.data() ?? {};
 
       double _num(v) =>
           (v is num) ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0.0;

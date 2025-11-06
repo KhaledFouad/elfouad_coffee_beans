@@ -63,7 +63,7 @@ class _ExtraDialogState extends State<ExtraDialog> {
         if (!snap.exists) {
           throw Exception('الصنف غير موجود.');
         }
-        final data = snap.data() as Map<String, dynamic>? ?? {};
+        final data = snap.data() ?? {};
         final curStock = _intOf(data['stock_units']);
         final unitPrice = _numOf(data['price_sell']);
         final unitCost = _numOf(data['cost_unit']);
@@ -104,10 +104,9 @@ class _ExtraDialogState extends State<ExtraDialog> {
       });
 
       if (!mounted) return;
-      Navigator.of(context).pop(); // اقفل الدايالوج
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('تم بيع $_qty × $_name')));
+      final nav = Navigator.of(context, rootNavigator: true);
+      nav.pop();
+      nav.pushNamedAndRemoveUntil('/', (r) => false);
     } catch (e, st) {
       logError(e, st);
       if (mounted) await showErrorDialog(context, e, st);
