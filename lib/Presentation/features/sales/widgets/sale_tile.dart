@@ -20,7 +20,7 @@ class SaleTile extends StatelessWidget {
         : theme.colorScheme.surface;
     final borderColor = isDeferredUnpaid
         ? deferredBorderColor(record.note)
-        : theme.dividerColor.withOpacity(0.1);
+        : theme.dividerColor.withValues(alpha: 0.1);
 
     final tile = ExpansionTile(
       tilePadding: const EdgeInsets.symmetric(horizontal: 8),
@@ -28,8 +28,9 @@ class SaleTile extends StatelessWidget {
       backgroundColor: Colors.transparent,
       leading: CircleAvatar(
         radius: 18,
-        backgroundColor:
-            isDeferredUnpaid ? deferredBaseColor(record.note) : Colors.brown.shade100,
+        backgroundColor: isDeferredUnpaid
+            ? deferredBaseColor(record.note)
+            : Colors.brown.shade100,
         child: Icon(
           _iconForType(record.type),
           color: Colors.brown.shade700,
@@ -41,9 +42,7 @@ class SaleTile extends StatelessWidget {
         spacing: 10,
         runSpacing: 4,
         crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          _KeyValue(label: 'الإجمالي', value: record.totalPrice),
-        ],
+        children: [_KeyValue(label: 'الإجمالي', value: record.totalPrice)],
       ),
       children: [
         if (record.components.isEmpty)
@@ -52,8 +51,9 @@ class SaleTile extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Column(
-              children:
-                  record.components.map((component) => _ComponentRow(component: component)).toList(),
+              children: record.components
+                  .map((component) => _ComponentRow(component: component))
+                  .toList(),
             ),
           ),
         if (record.usesSettledTime)
@@ -94,7 +94,10 @@ class SaleTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: tileBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor, width: isDeferredUnpaid ? 1.2 : 0.4),
+        border: Border.all(
+          color: borderColor,
+          width: isDeferredUnpaid ? 1.2 : 0.4,
+        ),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -173,7 +176,7 @@ class DeferredBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'أجل',
+            'أجل :   ',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -197,11 +200,7 @@ class DeferredBadge extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.border,
-    required this.fill,
-  });
+  const _Chip({required this.label, required this.border, required this.fill});
 
   final String label;
   final Color border;
@@ -299,8 +298,7 @@ class _SettleButton extends StatelessWidget {
                     const Color.fromARGB(255, 242, 240, 240),
                   ),
                   foregroundColor: WidgetStateProperty.all(Colors.brown),
-                  overlayColor:
-                      WidgetStateProperty.all(Colors.brown.shade50),
+                  overlayColor: WidgetStateProperty.all(Colors.brown.shade50),
                 ),
                 onPressed: () => Navigator.pop(context, false),
                 child: const Text(
@@ -310,8 +308,9 @@ class _SettleButton extends StatelessWidget {
               ),
               FilledButton(
                 style: ButtonStyle(
-                  backgroundColor:
-                      WidgetStateProperty.all(const Color(0xFF543824)),
+                  backgroundColor: WidgetStateProperty.all(
+                    const Color(0xFF543824),
+                  ),
                 ),
                 onPressed: () => Navigator.pop(context, true),
                 child: const Text('تأكيد'),

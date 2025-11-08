@@ -32,10 +32,13 @@ class QuickExtrasBox extends StatelessWidget {
                   child: Center(child: CircularProgressIndicator()),
                 );
               }
-              if (snap.hasError)
-                return Text('تعذر تحميل $title: ${snap.error}');
+              if (snap.hasError) {
+                return Text('Error loading $title: ${snap.error}');
+              }
               final items = snap.data ?? const <ExtraItem>[];
-              if (items.isEmpty) return Text('لا يوجد $title متاح حالياً');
+              if (items.isEmpty) {
+                return const Text('No quick extras available right now.');
+              }
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,43 +73,46 @@ class _ItemTile extends StatelessWidget {
   const _ItemTile({required this.item});
 
   Future<void> _askAndSell(BuildContext context) async {
-    final ctrl = TextEditingController(text: '1');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(item.name),
-        content: TextField(
-          controller: ctrl,
-          textAlign: TextAlign.center,
-          keyboardType: const TextInputType.numberWithOptions(),
-          decoration: const InputDecoration(labelText: 'الكمية (قطع)'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('بيع'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    final q = int.tryParse(ctrl.text.trim()) ?? 1;
+    final controller = TextEditingController(text: '1');
     try {
-      await sellExtra(extraId: item.id, qty: q);
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('تم بيع $q × ${item.name}')));
-    } catch (e) {
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('فشل البيع: $e')));
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(item.name),
+          content: TextField(
+            controller: controller,
+            textAlign: TextAlign.center,
+            keyboardType: const TextInputType.numberWithOptions(),
+            decoration: const InputDecoration(labelText: 'Quantity (pieces)'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Sell'),
+            ),
+          ],
+        ),
+      );
+
+      if (!context.mounted || confirmed != true) return;
+
+      final qty = int.tryParse(controller.text.trim()) ?? 1;
+      await sellExtra(extraId: item.id, qty: qty);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sold $qty x ${item.name}')),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to sell item: $error')),
+      );
+    } finally {
+      controller.dispose();
     }
   }
 
@@ -132,12 +138,12 @@ class _ItemTile extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '${item.priceSell.toStringAsFixed(2)} ج/قطعة',
+              '${item.priceSell.toStringAsFixed(2)} EGP / unit',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
             Text(
-              'مخزون: ${item.stockUnits}',
+              'Stock: ${item.stockUnits}',
               style: TextStyle(color: Colors.brown.shade700, fontSize: 12),
             ),
           ],

@@ -1,6 +1,6 @@
 // lib/drinks.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/DrinkDialog.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/drink_dialog.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 
@@ -211,8 +211,8 @@ class _DrinkCard extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.25),
-                    Colors.black.withOpacity(0.55),
+                    Colors.black.withValues(alpha: 0.25),
+                    Colors.black.withValues(alpha: 0.55),
                   ],
                 ),
               ),
@@ -225,9 +225,9 @@ class _DrinkCard extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
+                  color: Colors.black.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: Text(
                   title,

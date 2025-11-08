@@ -25,9 +25,9 @@ class ExtraItem {
 
   factory ExtraItem.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
     final m = d.data() ?? {};
-    double _num(v) =>
+    double numValue(v) =>
         (v is num) ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0.0;
-    int _int(v) => (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+    int intValue(v) => (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
 
     return ExtraItem(
       id: d.id,
@@ -35,9 +35,9 @@ class ExtraItem {
       category: (m['category'] ?? '').toString(),
       variant: (m['variant'] as String?)?.trim(),
       unit: (m['unit'] ?? 'piece').toString(),
-      priceSell: _num(m['price_sell']),
-      costUnit: _num(m['cost_unit']),
-      stockUnits: _int(m['stock_units']),
+      priceSell: numValue(m['price_sell']),
+      costUnit: numValue(m['cost_unit']),
+      stockUnits: intValue(m['stock_units']),
       active: (m['active'] ?? true) == true,
     );
   }

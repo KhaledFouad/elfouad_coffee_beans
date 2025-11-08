@@ -947,7 +947,7 @@ class _LineCard extends StatelessWidget {
 
     final dropdown = DropdownButtonFormField<SingleVariantItem>(
       isExpanded: true,
-      value: line.item,
+      initialValue: line.item,
       items: items.map((it) {
         final outOfStock = it.stock <= 0;
         final prefix = it.source == ItemSource.blends ? '' : '';

@@ -668,8 +668,8 @@ class _SingleDialogState extends State<SingleDialog> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.black.withOpacity(0.15),
-                                Colors.black.withOpacity(0.55),
+                                Colors.black.withValues(alpha: 0.15),
+                                Colors.black.withValues(alpha: 0.55),
                               ],
                             ),
                           ),

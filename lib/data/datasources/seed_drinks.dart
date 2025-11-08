@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 /// سيّد مجموعة drinks بتكلفة ثابتة لكل كوب، بدون أي اعتماد على blends.
 /// تقدر تعدّل الأسعار/التكاليف/الصور والـ roastLevels من المصفوفة تحت.
@@ -6,7 +7,7 @@ Future<void> seedDrinksFixed() async {
   final db = FirebaseFirestore.instance;
   final batch = db.batch();
 
-  print('🚀 Seeding drinks (fixed per-cup cost)…');
+  debugPrint('🚀 Seeding drinks (fixed per-cup cost)…');
 
   // === عرّف مشروباتك هنا ===
   final List<Map<String, dynamic>> drinks = [
@@ -163,19 +164,19 @@ Future<void> seedDrinksFixed() async {
       'createdAt': DateTime.now().toUtc(),
     });
 
-    print('✅ Drink added: $name | sell=$sellPrice | cost=$costPrice');
+    debugPrint('✅ Drink added: $name | sell=$sellPrice | cost=$costPrice');
     added++;
   }
 
   await batch.commit();
-  print('🎉 Done! Seeded $added drinks with fixed costs.');
+  debugPrint('🎉 Done! Seeded $added drinks with fixed costs.');
 }
 
 /// (اختياري) امسح مجموعة drinks بالكامل قبل التسييد.
 /// خلي بالك: الحذف على دفعات—استخدمها بحذر في بيئة التطوير فقط.
 Future<void> clearDrinks({int pageSize = 400}) async {
   final db = FirebaseFirestore.instance;
-  print('🧹 Clearing drinks collection…');
+  debugPrint('🧹 Clearing drinks collection…');
   while (true) {
     final snap = await db.collection('drinks').limit(pageSize).get();
     if (snap.docs.isEmpty) break;
@@ -184,7 +185,7 @@ Future<void> clearDrinks({int pageSize = 400}) async {
       batch.delete(d.reference);
     }
     await batch.commit();
-    print('…deleted ${snap.docs.length}');
+    debugPrint('…deleted ${snap.docs.length}');
   }
-  print('✅ drinks cleared.');
+  debugPrint('✅ drinks cleared.');
 }

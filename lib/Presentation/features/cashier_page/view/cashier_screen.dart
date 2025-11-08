@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-import 'SinglesPage.dart';
+import 'singles_page.dart';
 import 'blends_page.dart';
 import 'custom_blends_page.dart';
 import 'drinks.dart';
@@ -166,7 +166,7 @@ class _Badge extends StatelessWidget {
       child: Center(
         child: Text(
           text,
-          textScaleFactor: 1.0,
+          textScaler: const TextScaler.linear(1.0),
           style: const TextStyle(
             color: Colors.white,
             fontSize: 11,
@@ -224,7 +224,7 @@ class _CategoryCardState extends State<_CategoryCard>
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onTap,
-            splashColor: Colors.white.withOpacity(0.25),
+            splashColor: Colors.white.withValues(alpha: 0.25),
             highlightColor: Colors.transparent,
             child: SizedBox(
               width: widget.width,
@@ -244,8 +244,8 @@ class _CategoryCardState extends State<_CategoryCard>
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withOpacity(0.15),
-                          Colors.black.withOpacity(0.55),
+                          Colors.black.withValues(alpha: 0.15),
+                          Colors.black.withValues(alpha: 0.55),
                         ],
                       ),
                     ),

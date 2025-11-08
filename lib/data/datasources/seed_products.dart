@@ -1,8 +1,9 @@
+import 'package:flutter/foundation.dart';
 // lib/data/datasources/seedSingles.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 Future<void> seedSingles() async {
-  print("🚀 Seeding singles (per-KG pricing, stock in grams)...");
+  debugPrint("🚀 Seeding singles (per-KG pricing, stock in grams)...");
   final db = FirebaseFirestore.instance;
   final col = db.collection('singles');
   final batch = db.batch();
@@ -344,5 +345,5 @@ Future<void> seedSingles() async {
   }
 
   await batch.commit();
-  print("🎉 Done! Seeded ${rows.length} singles.");
+  debugPrint("🎉 Done! Seeded ${rows.length} singles.");
 }

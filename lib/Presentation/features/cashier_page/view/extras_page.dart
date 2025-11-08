@@ -1,11 +1,11 @@
 // extras_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/ExtraDialog.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/extra_dialog.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 
 class ExtrasPage extends StatelessWidget {
-  const ExtrasPage({Key? key}) : super(key: key);
+  const ExtrasPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -80,15 +80,15 @@ class ExtrasPage extends StatelessWidget {
               final name = (data['name'] ?? '').toString();
               final image = (data['image'] ?? 'assets/cookies.png').toString();
 
-              double _num(v) => (v is num)
+              double numValue(v) => (v is num)
                   ? v.toDouble()
                   : double.tryParse('${v ?? ''}') ?? 0.0;
-              int _int(v) =>
+              int intValue(v) =>
                   (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
 
-              final priceSell = _num(data['price_sell']);
-              final costUnit = _num(data['cost_unit']);
-              final stock = _int(data['stock_units']);
+              final priceSell = numValue(data['price_sell']);
+              final costUnit = numValue(data['cost_unit']);
+              final stock = intValue(data['stock_units']);
               final variant = (data['variant'] as String?)?.trim();
 
               return _ExtraItem(
@@ -244,8 +244,8 @@ class _ExtraCard extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.25),
-                    Colors.black.withOpacity(0.60),
+                    Colors.black.withValues(alpha: 0.25),
+                    Colors.black.withValues(alpha: 0.60),
                   ],
                 ),
               ),
@@ -258,9 +258,9 @@ class _ExtraCard extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.40),
+                  color: Colors.black.withValues(alpha: 0.40),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.20)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -341,6 +341,7 @@ Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
       ],
     ),
   );
+  if (!context.mounted) return;
   if (ok != true) return;
 
   final qty = int.tryParse(ctrl.text.trim()) ?? 1;
@@ -366,15 +367,16 @@ Future<void> _sellExtraTransaction(
       if (!snap.exists) throw 'الصنف غير موجود';
       final data = snap.data() ?? {};
 
-      double _num(v) =>
+      double numValue(v) =>
           (v is num) ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0.0;
-      int _int(v) => (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+      int intValue(v) =>
+          (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
 
       final name = (data['name'] ?? '').toString();
       final variant = (data['variant'] as String?)?.trim();
-      final priceSell = _num(data['price_sell']);
-      final costUnit = _num(data['cost_unit']);
-      final stockUnits = _int(data['stock_units']);
+      final priceSell = numValue(data['price_sell']);
+      final costUnit = numValue(data['cost_unit']);
+      final stockUnits = intValue(data['stock_units']);
 
       if (qty <= 0) throw 'كمية غير صالحة';
       if (stockUnits < qty) {

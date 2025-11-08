@@ -206,8 +206,8 @@ class _BlendCard extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.25),
-                    Colors.black.withOpacity(0.55),
+                    Colors.black.withValues(alpha: 0.25),
+                    Colors.black.withValues(alpha: 0.55),
                   ],
                 ),
               ),
@@ -219,9 +219,9 @@ class _BlendCard extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
+                  color: Colors.black.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: Text(
                   title,

@@ -7,8 +7,7 @@ class ExtraDialog extends StatefulWidget {
   final String extraId;
   final Map<String, dynamic> extraData;
 
-  const ExtraDialog({Key? key, required this.extraId, required this.extraData})
-    : super(key: key);
+  const ExtraDialog({super.key, required this.extraId, required this.extraData});
 
   @override
   State<ExtraDialog> createState() => _ExtraDialogState();
@@ -162,8 +161,8 @@ class _ExtraDialogState extends State<ExtraDialog> {
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  Colors.black.withOpacity(0.15),
-                                  Colors.black.withOpacity(0.55),
+                                Colors.black.withValues(alpha: 0.15),
+                                Colors.black.withValues(alpha: 0.55),
                                 ],
                               ),
                             ),

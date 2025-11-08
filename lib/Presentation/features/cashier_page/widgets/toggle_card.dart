@@ -53,18 +53,21 @@ class ToggleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // لو المستخدم ما بعثش ألوان غير المختارة، نولّد الافتراضيات من Theme
-    final Color _unselectedBg = unselectedBg ?? Colors.brown.shade50;
-    final Color _selectedBorder = selectedBorder ?? Colors.brown.shade700;
-    final Color _unselectedBorder = unselectedBorder ?? Colors.brown.shade100;
+    final Color resolvedUnselectedBg =
+        unselectedBg ?? Colors.brown.shade50;
+    final Color resolvedSelectedBorder =
+        selectedBorder ?? Colors.brown.shade700;
+    final Color resolvedUnselectedBorder =
+        unselectedBorder ?? Colors.brown.shade100;
 
     return Semantics(
       container: true,
       label: title,
       child: Container(
         decoration: BoxDecoration(
-          color: value ? (selectedBg!) : _unselectedBg,
+          color: value ? (selectedBg!) : resolvedUnselectedBg,
           border: Border.all(
-            color: value ? _selectedBorder : _unselectedBorder,
+            color: value ? resolvedSelectedBorder : resolvedUnselectedBorder,
           ),
           borderRadius: BorderRadius.circular(12),
         ),
@@ -109,8 +112,8 @@ class ToggleCard extends StatelessWidget {
                   subtitle!,
                   style: TextStyle(
                     color: value
-                        ? (selectedText!).withOpacity(0.9)
-                        : (unselectedText!).withOpacity(0.9),
+                        ? (selectedText!).withValues(alpha: 0.9)
+                        : (unselectedText!).withValues(alpha: 0.9),
                     fontSize: 14,
                   ),
                 ),

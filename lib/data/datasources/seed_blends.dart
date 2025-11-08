@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 Future<void> seedBlends() async {
   final firestore = FirebaseFirestore.instance;
@@ -311,5 +312,5 @@ Future<void> seedBlends() async {
   }
 
   await batch.commit();
-  print("✅ Seeded ${allBlends.length} blends");
+  debugPrint("✅ Seeded ${allBlends.length} blends");
 }

@@ -243,27 +243,38 @@ DateTime shiftDayByFourHours(DateTime input) {
   return input.subtract(const Duration(hours: _dayBoundaryHour));
 }
 
-Color deferredBaseColor(String note) {
-  if (note.isEmpty) {
-    return const Color(0xFFFFE5E5);
-  }
-  final hash = note.hashCode;
-  final hue = (hash & 0x7FFFFFFF) % 360;
-  final hsl = HSLColor.fromAHSL(1, hue.toDouble(), 0.45, 0.80);
-  return hsl.toColor();
+const List<Color> _deferredPalette = [
+  Color(0xFFFFCDD2),
+  Color(0xFFFFF9C4),
+  Color(0xFFC5CAE9),
+  Color(0xFFB2DFDB),
+  Color(0xFFFFE0B2),
+  Color(0xFFD1C4E9),
+  Color(0xFFFFF59D),
+  Color(0xFFA5D6A7),
+  Color(0xFFFFCCBC),
+  Color(0xFFB39DDB),
+];
+
+Color _paletteColorFor(String note) {
+  if (note.isEmpty) return _deferredPalette.first;
+  final hash = note.hashCode & 0x7fffffff;
+  return _deferredPalette[hash % _deferredPalette.length];
 }
+
+Color deferredBaseColor(String note) => _paletteColorFor(note);
 
 Color deferredTileColor(String note) {
   final base = deferredBaseColor(note);
-  return Color.lerp(base, Colors.white, 0.55)!;
+  return Color.lerp(base, Colors.white, 0.35)!;
 }
 
 Color deferredBorderColor(String note) {
   final base = deferredBaseColor(note);
-  return Color.lerp(base, Colors.brown.shade700, 0.2)!;
+  return Color.lerp(base, Colors.brown.shade700, 0.3)!;
 }
 
 Color deferredTextColor(String note) {
   final bg = deferredTileColor(note);
-  return bg.computeLuminance() > 0.6 ? Colors.brown.shade800 : Colors.white;
+  return bg.computeLuminance() > 0.7 ? Colors.brown.shade800 : Colors.white;
 }
