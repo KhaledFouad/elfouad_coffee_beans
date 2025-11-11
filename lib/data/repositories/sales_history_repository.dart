@@ -18,12 +18,14 @@ class SalesHistoryRepository {
 
     var rangeDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
     var deferredDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    var settledDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
     StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? rangeSub;
     StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? deferredSub;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? settledSub;
 
     void emitCombined() {
       if (controller.isClosed) return;
-      final merged = _mergeSnapshots(rangeDocs, deferredDocs);
+      final merged = _mergeSnapshots(rangeDocs, deferredDocs, settledDocs);
       controller.add(merged);
     }
 
@@ -45,11 +47,20 @@ class SalesHistoryRepository {
         },
         onError: controller.addError,
       );
+
+      settledSub = _settledQuery(range).snapshots().listen(
+        (snapshot) {
+          settledDocs = snapshot.docs;
+          emitCombined();
+        },
+        onError: controller.addError,
+      );
     };
 
     controller.onCancel = () async {
       await rangeSub?.cancel();
       await deferredSub?.cancel();
+      await settledSub?.cancel();
       await controller.close();
     };
 
@@ -132,11 +143,24 @@ class SalesHistoryRepository {
         .limit(_deferredLimit);
   }
 
+  Query<Map<String, dynamic>> _settledQuery(DateTimeRange range) {
+    final start = range.start.toUtc();
+    final end = range.end.toUtc();
+
+    return _firestore
+        .collection('sales')
+        .where('settled_at', isGreaterThanOrEqualTo: start)
+        .where('settled_at', isLessThan: end)
+        .orderBy('settled_at', descending: true)
+        .limit(_historyLimit);
+  }
+
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _mergeSnapshots(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> primary,
     List<QueryDocumentSnapshot<Map<String, dynamic>>> deferred,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> settled,
   ) {
-    if (primary.isEmpty && deferred.isEmpty) {
+    if (primary.isEmpty && deferred.isEmpty && settled.isEmpty) {
       return const [];
     }
 
@@ -145,6 +169,9 @@ class SalesHistoryRepository {
       combined[doc.id] = doc;
     }
     for (final doc in deferred) {
+      combined[doc.id] = doc;
+    }
+    for (final doc in settled) {
       combined[doc.id] = doc;
     }
 
