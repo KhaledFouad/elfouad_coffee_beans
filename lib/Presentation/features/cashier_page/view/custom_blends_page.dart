@@ -1,5 +1,6 @@
 // lib/Presentation/features/cashier_page/view/custom_blends_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/deferred_note_field.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:flutter/material.dart';
 
@@ -149,6 +150,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
   List<SingleVariantItem> _allItems = []; // Singles + Blends (محددة)
   final List<_BlendLine> _lines = [_BlendLine()];
+  final TextEditingController _noteCtrl = TextEditingController();
 
   bool _isComplimentary = false; // ضيافة
   bool _isDeferred = false; // أجِّل
@@ -600,6 +602,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           };
         }).toList();
 
+        final note = isDef ? _noteCtrl.text.trim() : '';
         final saleRef = db.collection('sales').doc();
         txn.set(saleRef, {
           'created_at': FieldValue.serverTimestamp(),
@@ -611,6 +614,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           'is_deferred': isDef,
           'due_amount': isDef ? totalPriceWould : 0.0,
           'paid': !isDef,
+          'note': note,
 
           // ملخص
           'lines_amount': _sumPriceLines,
@@ -673,15 +677,28 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   void _setComplimentary(bool v) {
     setState(() {
       _isComplimentary = v;
-      if (v) _isDeferred = false;
+      if (v) {
+        _isDeferred = false;
+        _noteCtrl.clear();
+      }
     });
   }
 
   void _setDeferred(bool v) {
     setState(() {
       _isDeferred = v;
-      if (v) _isComplimentary = false;
+      if (v) {
+        _isComplimentary = false;
+      } else {
+        _noteCtrl.clear();
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -849,6 +866,9 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                           ? 0.0
                           : _ginsengPriceAmount,
                       totalPrice: _uiTotal,
+                      noteController: _noteCtrl,
+                      noteVisible: _isDeferred,
+                      noteEnabled: !_busy,
                     ),
                   );
 
@@ -1200,6 +1220,9 @@ class _TotalsCard extends StatelessWidget {
   final double spiceAmount;
   final double ginsengAmount;
   final double totalPrice;
+  final TextEditingController noteController;
+  final bool noteVisible;
+  final bool noteEnabled;
 
   const _TotalsCard({
     required this.isComplimentary,
@@ -1216,6 +1239,9 @@ class _TotalsCard extends StatelessWidget {
     required this.spiceAmount,
     required this.ginsengAmount,
     required this.totalPrice,
+    required this.noteController,
+    required this.noteVisible,
+    required this.noteEnabled,
   });
 
   @override
@@ -1246,6 +1272,11 @@ class _TotalsCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            DeferredNoteField(
+              controller: noteController,
+              visible: noteVisible,
+              enabled: noteEnabled,
             ),
             const SizedBox(height: 12),
             // — محوّج —

@@ -3,6 +3,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/deferred_note_field.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
@@ -43,6 +44,7 @@ class _SingleDialogState extends State<SingleDialog> {
 
   final TextEditingController _gramsCtrl = TextEditingController();
   final TextEditingController _moneyCtrl = TextEditingController();
+  final TextEditingController _noteCtrl = TextEditingController();
 
   CalcMode _mode = CalcMode.byGrams;
 
@@ -83,6 +85,8 @@ class _SingleDialogState extends State<SingleDialog> {
       _isDeferred = v;
       if (v) {
         _isComplimentary = false; // تنافي
+      } else {
+        _noteCtrl.clear();
       }
     });
   }
@@ -526,6 +530,7 @@ class _SingleDialogState extends State<SingleDialog> {
             : (totalPriceOut - totalCostOut);
 
         final saleRef = db.collection('sales').doc();
+        final note = isDeferred ? _noteCtrl.text.trim() : '';
         txn.set(saleRef, {
           'created_at': FieldValue.serverTimestamp(),
           'created_by': 'cashier_web',
@@ -584,6 +589,7 @@ class _SingleDialogState extends State<SingleDialog> {
           'entered_money': _mode == CalcMode.byMoney
               ? _parseDouble(_moneyCtrl.text)
               : 0.0,
+          'note': note,
         });
       });
 
@@ -782,6 +788,11 @@ class _SingleDialogState extends State<SingleDialog> {
                               ),
                             ),
                           ],
+                        ),
+                        DeferredNoteField(
+                          controller: _noteCtrl,
+                          visible: _isDeferred,
+                          enabled: !_busy,
                         ),
                         const SizedBox(height: 12),
 
@@ -1020,6 +1031,7 @@ class _SingleDialogState extends State<SingleDialog> {
   void dispose() {
     _gramsCtrl.dispose();
     _moneyCtrl.dispose();
+    _noteCtrl.dispose();
     super.dispose();
   }
 }

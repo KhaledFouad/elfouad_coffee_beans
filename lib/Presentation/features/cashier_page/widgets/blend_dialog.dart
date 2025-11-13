@@ -3,6 +3,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/blends_models.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/deferred_note_field.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
@@ -35,6 +36,7 @@ class _BlendDialogState extends State<BlendDialog> {
 
   final TextEditingController _gramsCtrl = TextEditingController();
   final TextEditingController _priceCtrl = TextEditingController();
+  final TextEditingController _noteCtrl = TextEditingController();
   InputMode _mode = InputMode.grams;
 
   bool _showPad = false;
@@ -74,6 +76,7 @@ class _BlendDialogState extends State<BlendDialog> {
       _isComplimentary = v;
       if (v) {
         _isDeferred = false;
+        _noteCtrl.clear();
         // ضيافة = صفر، يبقى نقفل إدخال بالسعر
         if (_mode == InputMode.price) {
           _mode = InputMode.grams;
@@ -87,7 +90,11 @@ class _BlendDialogState extends State<BlendDialog> {
   void _setDeferred(bool v) {
     setState(() {
       _isDeferred = v;
-      if (v) _isComplimentary = false;
+      if (v) {
+        _isComplimentary = false;
+      } else {
+        _noteCtrl.clear();
+      }
     });
   }
 
@@ -502,6 +509,7 @@ class _BlendDialogState extends State<BlendDialog> {
             ? 0.0
             : (wouldTotalPrice - totalCostOut);
 
+        final note = isDef ? _noteCtrl.text.trim() : '';
         final saleRef = db.collection('sales').doc();
         txn.set(saleRef, {
           'created_at': FieldValue.serverTimestamp(),
@@ -518,6 +526,7 @@ class _BlendDialogState extends State<BlendDialog> {
           'is_deferred': isDef,
           'due_amount': isDef ? wouldTotalPrice : 0.0,
           'paid': !isDef,
+          'note': note,
 
           // تحويج
           'is_spiced': _isSpiced && canSp,
@@ -759,6 +768,11 @@ class _BlendDialogState extends State<BlendDialog> {
                             ),
                           ],
                         ),
+                        DeferredNoteField(
+                          controller: _noteCtrl,
+                          visible: _isDeferred,
+                          enabled: !_busy,
+                        ),
                         const SizedBox(height: 12),
 
                         // === جينسنج (فقط لو canSpice) ===
@@ -999,6 +1013,7 @@ class _BlendDialogState extends State<BlendDialog> {
   void dispose() {
     _gramsCtrl.dispose();
     _priceCtrl.dispose();
+    _noteCtrl.dispose();
     super.dispose();
   }
 }

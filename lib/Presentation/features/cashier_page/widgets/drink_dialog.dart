@@ -2,6 +2,7 @@
 // ignore_for_file: unused_local_variable, unused_element
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/deferred_note_field.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 import 'toggle_card.dart'; // الكارد المعاد استخدامه
@@ -27,6 +28,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
   bool _busy = false;
   String? _fatal;
   int _qty = 1;
+  final TextEditingController _noteCtrl = TextEditingController();
 
   // Serving (سنجل/دوبل) للتركي/اسبريسو فقط
   Serving _serving = Serving.single;
@@ -67,14 +69,21 @@ class _DrinkDialogState extends State<DrinkDialog> {
   void _setComplimentary(bool v) {
     setState(() {
       _isComplimentary = v;
-      if (v) _isDeferred = false; // تنافي
+      if (v) {
+        _isDeferred = false; // تنافي
+        _noteCtrl.clear();
+      }
     });
   }
 
   void _setDeferred(bool v) {
     setState(() {
       _isDeferred = v;
-      if (v) _isComplimentary = false; // تنافي
+      if (v) {
+        _isComplimentary = false; // تنافي
+      } else {
+        _noteCtrl.clear();
+      }
     });
   }
 
@@ -249,6 +258,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
         final profitOut = (isComp || isDeferred)
             ? 0.0
             : (totalCost > 0 ? (_totalPrice - totalCost) : 0.0);
+        final note = isDeferred ? _noteCtrl.text.trim() : '';
 
         tx.set(saleRef, {
           'type': 'drink',
@@ -269,6 +279,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
           'is_deferred': isDeferred,
           'paid': isDeferred ? false : true, // ⬅️ الأجل يطلع غير مدفوع
           'due_amount': isDeferred ? wouldTotalPrice : 0.0,
+          'note': note,
           'list_cost': _costPriceSingle,
           'unit_cost': unitCost,
 
@@ -471,10 +482,16 @@ class _DrinkDialogState extends State<DrinkDialog> {
                                     : (v) => _setDeferred(v),
                               ),
                             ),
-                          ],
-                        ),
+                        ],
+                      ),
 
-                        const SizedBox(height: 12),
+                      DeferredNoteField(
+                        controller: _noteCtrl,
+                        visible: _isDeferred,
+                        enabled: !_busy,
+                      ),
+
+                      const SizedBox(height: 12),
 
                         // سعر الكوب
                         Row(
@@ -654,5 +671,11 @@ class _DrinkDialogState extends State<DrinkDialog> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    super.dispose();
   }
 }
