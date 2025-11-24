@@ -118,13 +118,12 @@ class _BlendDialogState extends State<BlendDialog> {
   @override
   void initState() {
     super.initState();
-    _variantOptions =
-        widget.group.variants.keys
-            .map((e) => e.toString().trim())
-            .where((e) => e.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
+    _variantOptions = widget.group.variants.keys
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
     _variant = _variantOptions.isNotEmpty ? _variantOptions.first : null;
     _preloadVariantMeta();
   }
@@ -387,9 +386,8 @@ class _BlendDialogState extends State<BlendDialog> {
                 ? null
                 : () {
                     setState(
-                      () => _ginsengGrams = (_ginsengGrams > 0)
-                          ? _ginsengGrams - 1
-                          : 0,
+                      () => _ginsengGrams =
+                          (_ginsengGrams > 0) ? _ginsengGrams - 1 : 0,
                     );
                   },
             icon: const Icon(Icons.remove),
@@ -427,8 +425,8 @@ class _BlendDialogState extends State<BlendDialog> {
         () => _fatal = _mode == InputMode.grams
             ? 'من فضلك أدخل كمية صحيحة بالجرام.'
             : (_isComplimentary
-                  ? 'لا يمكن إدخال بالسعر مع ضيافة.'
-                  : 'من فضلك أدخل سعرًا صحيحًا.'),
+                ? 'لا يمكن إدخال بالسعر مع ضيافة.'
+                : 'من فضلك أدخل سعرًا صحيحًا.'),
       );
       await showErrorDialog(context, _fatal!);
       return;
@@ -471,26 +469,21 @@ class _BlendDialogState extends State<BlendDialog> {
             : double.tryParse('${data['spicesCost'] ?? ''}') ?? 0.0;
 
         final canSp = _canSpice;
-        final spicePricePerG = (_isSpiced && canSp)
-            ? (spicesPricePerKg / 1000.0)
-            : 0.0;
-        final spiceCostPerG = (_isSpiced && canSp)
-            ? (spicesCostPerKg / 1000.0)
-            : 0.0;
+        final spicePricePerG =
+            (_isSpiced && canSp) ? (spicesPricePerKg / 1000.0) : 0.0;
+        final spiceCostPerG =
+            (_isSpiced && canSp) ? (spicesCostPerKg / 1000.0) : 0.0;
 
         // مبالغ السعر/التكلفة (بن + تحويج + جينسنج)
         final beansPriceAmount = _sellPerG * need;
-        final spicePriceAmount = (_isSpiced && canSp)
-            ? (spicePricePerG * need)
-            : 0.0;
-        final ginsengPriceAmount = _isComplimentary
-            ? 0.0
-            : (_ginsengGrams * _ginsengPricePerG);
+        final spicePriceAmount =
+            (_isSpiced && canSp) ? (spicePricePerG * need) : 0.0;
+        final ginsengPriceAmount =
+            _isComplimentary ? 0.0 : (_ginsengGrams * _ginsengPricePerG);
 
         final beansCostAmount = _costPerG * need;
-        final spiceCostAmount = (_isSpiced && canSp)
-            ? (spiceCostPerG * need)
-            : 0.0;
+        final spiceCostAmount =
+            (_isSpiced && canSp) ? (spiceCostPerG * need) : 0.0;
         final ginsengCostAmount = _ginsengGrams * _ginsengCostPerG;
 
         final isComp = _isComplimentary;
@@ -505,9 +498,8 @@ class _BlendDialogState extends State<BlendDialog> {
             beansCostAmount + spiceCostAmount + ginsengCostAmount;
 
         // الربح الظاهر = 0 لو ضيافة أو أجل غير مدفوع
-        final profitOut = (isDef || isComp)
-            ? 0.0
-            : (wouldTotalPrice - totalCostOut);
+        final profitOut =
+            (isDef || isComp) ? 0.0 : (wouldTotalPrice - totalCostOut);
 
         final note = isDef ? _noteCtrl.text.trim() : '';
         final saleRef = db.collection('sales').doc();
@@ -575,8 +567,8 @@ class _BlendDialogState extends State<BlendDialog> {
       final msg = e is UserFriendly
           ? e.message
           : (e is FirebaseException
-                ? 'خطأ في قاعدة البيانات (${e.code})'
-                : 'حدث خطأ غير متوقع.');
+              ? 'خطأ في قاعدة البيانات (${e.code})'
+              : 'حدث خطأ غير متوقع.');
       if (!mounted) return;
       await showDialog(
         context: context,
@@ -601,406 +593,410 @@ class _BlendDialogState extends State<BlendDialog> {
     final name = widget.group.name;
     final image = widget.group.image;
 
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: bottomInset + 12),
-      child: SafeArea(
-        child: Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 24,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.zero,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(18),
-                    ),
-                    child: Stack(
-                      children: [
-                        Image.asset(
-                          image,
-                          height: 140,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                        Container(
-                          height: 140,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.15),
-                                Colors.black.withValues(alpha: 0.55),
-                              ],
-                            ),
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final viewInsets =
+        EdgeInsets.fromViewPadding(view.viewInsets, view.devicePixelRatio);
+    final bottomInset = viewInsets.bottom;
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(viewInsets: viewInsets),
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: bottomInset + 12),
+        child: SafeArea(
+          child: Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.zero,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(18),
+                      ),
+                      child: Stack(
+                        children: [
+                          Image.asset(
+                            image,
+                            height: 140,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
                           ),
-                        ),
-                        Positioned.fill(
-                          child: Center(
-                            child: Text(
-                              name,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 27,
-                                fontWeight: FontWeight.w800,
+                          Container(
+                            height: 140,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.15),
+                                  Colors.black.withValues(alpha: 0.55),
+                                ],
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Body
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        if (_variantOptions.isNotEmpty) ...[
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: _variantOptions.map((r) {
-                                final selected = (_variant ?? '') == r;
-                                final v = widget.group.variants[r];
-                                final stock = v?.stock ?? double.infinity;
-                                final disabled = stock <= 0;
-                                final label = disabled ? '$r (غير متاح)' : r;
-                                return ChoiceChip(
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (disabled)
-                                        const Icon(Icons.block, size: 16),
-                                      if (disabled) const SizedBox(width: 6),
-                                      Text(
-                                        label,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  selected: selected,
-                                  onSelected: _busy || disabled
-                                      ? null
-                                      : (vSel) {
-                                          if (!vSel) return;
-                                          setState(() {
-                                            _variant = r;
-                                            if (!_canSpice) {
-                                              _isSpiced = false;
-                                              _ginsengGrams = 0;
-                                            }
-                                          });
-                                        },
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  labelPadding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
-                                  side: BorderSide(
-                                    color: disabled
-                                        ? Colors.grey.shade300
-                                        : Colors.brown.shade200,
-                                  ),
-                                  selectedColor: disabled
-                                      ? Colors.grey.shade200
-                                      : Colors.brown.shade100,
-                                  backgroundColor: disabled
-                                      ? Colors.grey.shade100
-                                      : null,
-                                );
-                              }).toList(),
+                          Positioned.fill(
+                            child: Center(
+                              child: Text(
+                                name,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 27,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 12),
                         ],
+                      ),
+                    ),
 
-                        // === محوّج + ضيافة + أجِّل (صف واحد) ===
-                        Row(
-                          children: [
-                            if (_canSpice) ...[
+                    // Body
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          if (_variantOptions.isNotEmpty) ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: _variantOptions.map((r) {
+                                  final selected = (_variant ?? '') == r;
+                                  final v = widget.group.variants[r];
+                                  final stock = v?.stock ?? double.infinity;
+                                  final disabled = stock <= 0;
+                                  final label = disabled ? '$r (غير متاح)' : r;
+                                  return ChoiceChip(
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (disabled)
+                                          const Icon(Icons.block, size: 16),
+                                        if (disabled) const SizedBox(width: 6),
+                                        Text(
+                                          label,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    selected: selected,
+                                    onSelected: _busy || disabled
+                                        ? null
+                                        : (vSel) {
+                                            if (!vSel) return;
+                                            setState(() {
+                                              _variant = r;
+                                              if (!_canSpice) {
+                                                _isSpiced = false;
+                                                _ginsengGrams = 0;
+                                              }
+                                            });
+                                          },
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    labelPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    side: BorderSide(
+                                      color: disabled
+                                          ? Colors.grey.shade300
+                                          : Colors.brown.shade200,
+                                    ),
+                                    selectedColor: disabled
+                                        ? Colors.grey.shade200
+                                        : Colors.brown.shade100,
+                                    backgroundColor:
+                                        disabled ? Colors.grey.shade100 : null,
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
+                          // === محوّج + ضيافة + أجِّل (صف واحد) ===
+                          Row(
+                            children: [
+                              if (_canSpice) ...[
+                                Expanded(
+                                  child: ToggleCard(
+                                    title: 'محوّج',
+                                    value: _isSpiced,
+                                    onChanged: (v) =>
+                                        setState(() => _isSpiced = v),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
                               Expanded(
                                 child: ToggleCard(
-                                  title: 'محوّج',
-                                  value: _isSpiced,
-                                  onChanged: (v) =>
-                                      setState(() => _isSpiced = v),
+                                  title: 'ضيافة',
+                                  value: _isComplimentary,
+                                  onChanged: (v) => _setComplimentary(v),
                                 ),
                               ),
                               const SizedBox(width: 12),
+                              Expanded(
+                                child: ToggleCard(
+                                  title: 'أجِّل',
+                                  value: _isDeferred,
+                                  onChanged: (v) => _setDeferred(v),
+                                ),
+                              ),
                             ],
-                            Expanded(
-                              child: ToggleCard(
-                                title: 'ضيافة',
-                                value: _isComplimentary,
-                                onChanged: (v) => _setComplimentary(v),
+                          ),
+                          DeferredNoteField(
+                            controller: _noteCtrl,
+                            visible: _isDeferred,
+                            enabled: !_busy,
+                          ),
+                          const SizedBox(height: 12),
+
+                          // === جينسنج (فقط لو canSpice) ===
+                          _ginsengCard(),
+                          if (_canSpice) const SizedBox(height: 12),
+
+                          // وضع الإدخال
+                          Align(
+                            alignment: Alignment.center,
+                            child: SegmentedButton<InputMode>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: InputMode.grams,
+                                  label: Text('إدخال بالجرامات'),
+                                  icon: Icon(Icons.scale),
+                                ),
+                                ButtonSegment(
+                                  value: InputMode.price,
+                                  label: Text('إدخال بالسعر'),
+                                  icon: Icon(Icons.attach_money),
+                                ),
+                              ],
+                              selected: {_mode},
+                              onSelectionChanged: _busy
+                                  ? null
+                                  : (s) => setState(() {
+                                        _mode = (s.first == InputMode.price &&
+                                                _isComplimentary)
+                                            ? InputMode.grams
+                                            : s.first;
+                                        if (_showPad) {
+                                          if (_padTarget == _PadTarget.price &&
+                                              _mode != InputMode.price) {
+                                            _closePad();
+                                          }
+                                          if (_padTarget == _PadTarget.grams &&
+                                              _mode != InputMode.grams) {
+                                            _closePad();
+                                          }
+                                        }
+                                      }),
+                              showSelectedIcon: false,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          if (_mode == InputMode.grams) ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                children: [
+                                  const Text('الكمية (جم)'),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _gramsCtrl,
+                                      readOnly: true,
+                                      textAlign: TextAlign.center,
+                                      onTap: _busy
+                                          ? null
+                                          : () => _openPad(_PadTarget.grams),
+                                      decoration: const InputDecoration(
+                                        hintText: 'مثال: 250',
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 10,
+                                        ),
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ToggleCard(
-                                title: 'أجِّل',
-                                value: _isDeferred,
-                                onChanged: (v) => _setDeferred(v),
+                          ] else ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                children: [
+                                  const Text('المبلغ (جم)'),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _priceCtrl,
+                                      readOnly: true,
+                                      enabled: !_isComplimentary,
+                                      textAlign: TextAlign.center,
+                                      onTap: (_busy || _isComplimentary)
+                                          ? null
+                                          : () => _openPad(_PadTarget.price),
+                                      decoration: const InputDecoration(
+                                        hintText: 'مثال: 120.00',
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 10,
+                                        ),
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Text('الجرامات المحسوبة'),
+                                const Spacer(),
+                                Text(
+                                  '${_gramsEffective.toString()} جم',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
-                        ),
-                        DeferredNoteField(
-                          controller: _noteCtrl,
-                          visible: _isDeferred,
-                          enabled: !_busy,
-                        ),
-                        const SizedBox(height: 12),
 
-                        // === جينسنج (فقط لو canSpice) ===
-                        _ginsengCard(),
-                        if (_canSpice) const SizedBox(height: 12),
-
-                        // وضع الإدخال
-                        Align(
-                          alignment: Alignment.center,
-                          child: SegmentedButton<InputMode>(
-                            segments: const [
-                              ButtonSegment(
-                                value: InputMode.grams,
-                                label: Text('إدخال بالجرامات'),
-                                icon: Icon(Icons.scale),
-                              ),
-                              ButtonSegment(
-                                value: InputMode.price,
-                                label: Text('إدخال بالسعر'),
-                                icon: Icon(Icons.attach_money),
-                              ),
-                            ],
-                            selected: {_mode},
-                            onSelectionChanged: _busy
-                                ? null
-                                : (s) => setState(() {
-                                    _mode =
-                                        (s.first == InputMode.price &&
-                                            _isComplimentary)
-                                        ? InputMode.grams
-                                        : s.first;
-                                    if (_showPad) {
-                                      if (_padTarget == _PadTarget.price &&
-                                          _mode != InputMode.price) {
-                                        _closePad();
-                                      }
-                                      if (_padTarget == _PadTarget.grams &&
-                                          _mode != InputMode.grams) {
-                                        _closePad();
-                                      }
-                                    }
-                                  }),
-                            showSelectedIcon: false,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        if (_mode == InputMode.grams) ...[
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Row(
-                              children: [
-                                const Text('الكمية (جم)'),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _gramsCtrl,
-                                    readOnly: true,
-                                    textAlign: TextAlign.center,
-                                    onTap: _busy
-                                        ? null
-                                        : () => _openPad(_PadTarget.grams),
-                                    decoration: const InputDecoration(
-                                      hintText: 'مثال: 250',
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                        vertical: 12,
-                                        horizontal: 10,
-                                      ),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ] else ...[
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Row(
-                              children: [
-                                const Text('المبلغ (جم)'),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _priceCtrl,
-                                    readOnly: true,
-                                    enabled: !_isComplimentary,
-                                    textAlign: TextAlign.center,
-                                    onTap: (_busy || _isComplimentary)
-                                        ? null
-                                        : () => _openPad(_PadTarget.price),
-                                    decoration: const InputDecoration(
-                                      hintText: 'مثال: 120.00',
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                        vertical: 12,
-                                        horizontal: 10,
-                                      ),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          const SizedBox(height: 12),
+                          _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
+                          _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
                           const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Text('الجرامات المحسوبة'),
-                              const Spacer(),
-                              Text(
-                                '${_gramsEffective.toString()} جم',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
+
+                          // الإجمالي
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.brown.shade50,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.brown.shade100),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'الإجمالي',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                Text(
+                                  _totalPrice.toStringAsFixed(2),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          if (_fatal != null) ...[
+                            const SizedBox(height: 10),
+                            _WarningBox(text: _fatal!),
+                          ],
+
+                          // النومباد
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 160),
+                            curve: Curves.easeOut,
+                            child: _showPad
+                                ? _numPad(
+                                    allowDot: _padTarget == _PadTarget.price,
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                         ],
+                      ),
+                    ),
 
-                        const SizedBox(height: 12),
-                        _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
-                        _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
-                        const SizedBox(height: 8),
-
-                        // الإجمالي
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.brown.shade50,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.brown.shade100),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'الإجمالي',
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed:
+                                  _busy ? null : () => Navigator.pop(context),
+                              child: const Text(
+                                'إلغاء',
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                _totalPrice.toStringAsFixed(2),
-                                style: const TextStyle(
+                                  color: Color(0xFF543824),
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14,
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-
-                        if (_fatal != null) ...[
-                          const SizedBox(height: 10),
-                          _WarningBox(text: _fatal!),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton(
+                              style: ButtonStyle(
+                                backgroundColor: WidgetStateProperty.all(
+                                  const Color(0xFF543824),
+                                ),
+                              ),
+                              onPressed: _busy ? null : _commitSale,
+                              child: _busy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'تأكيد',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                            ),
+                          ),
                         ],
-
-                        // النومباد
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 160),
-                          curve: Curves.easeOut,
-                          child: _showPad
-                              ? _numPad(
-                                  allowDot: _padTarget == _PadTarget.price,
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-
-                  const Divider(height: 1),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _busy
-                                ? null
-                                : () => Navigator.pop(context),
-                            child: const Text(
-                              'إلغاء',
-                              style: TextStyle(
-                                color: Color(0xFF543824),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FilledButton(
-                            style: ButtonStyle(
-                              backgroundColor: WidgetStateProperty.all(
-                                const Color(0xFF543824),
-                              ),
-                            ),
-                            onPressed: _busy ? null : _commitSale,
-                            child: _busy
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text(
-                                    'تأكيد',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

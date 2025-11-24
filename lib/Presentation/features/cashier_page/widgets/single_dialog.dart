@@ -386,8 +386,7 @@ class _SingleDialogState extends State<SingleDialog> {
   // === كروت التبديل بنفس ديزاين المشروبات ===
 
   Widget _ginsengCard() {
-    // يظهر فقط لو الصنف بيدعم التحويج (canSpice)
-    if (!_canSpice) return const SizedBox.shrink();
+    // Ginseng add-on stays available even if spices are disabled.
     return Container(
       decoration: BoxDecoration(
         color: Colors.brown.shade50,
@@ -631,12 +630,17 @@ class _SingleDialogState extends State<SingleDialog> {
     final name = widget.group.name;
     final image = widget.group.image;
 
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: bottomInset + 12),
-      child: SafeArea(
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final viewInsets =
+        EdgeInsets.fromViewPadding(view.viewInsets, view.devicePixelRatio);
+    final bottomInset = viewInsets.bottom;
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(viewInsets: viewInsets),
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: bottomInset + 12),
+        child: SafeArea(
         child: Dialog(
           insetPadding: const EdgeInsets.symmetric(
             horizontal: 16,
@@ -796,9 +800,9 @@ class _SingleDialogState extends State<SingleDialog> {
                         ),
                         const SizedBox(height: 12),
 
-                        // === جينسنج (يظهر فقط لو canSpice) ===
+                        // === Ginseng add-on ===
                         _ginsengCard(),
-                        if (_canSpice) const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
                         // وضع الحساب
                         Align(
@@ -1024,7 +1028,8 @@ class _SingleDialogState extends State<SingleDialog> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   @override

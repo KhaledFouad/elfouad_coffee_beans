@@ -183,18 +183,16 @@ class _DrinkDialogState extends State<DrinkDialog> {
       final perUnitConsumption = (usedAmount == null || usedAmount <= 0)
           ? 0.0
           : (isDouble
-                ? (_doubleUsedAmount > 0 ? _doubleUsedAmount : usedAmount * 2.0)
-                : usedAmount);
+              ? (_doubleUsedAmount > 0 ? _doubleUsedAmount : usedAmount * 2.0)
+              : usedAmount);
 
       final totalConsumption = perUnitConsumption * _qty;
 
-      final sourceBlendId = (widget.drinkData['sourceBlendId'] ?? '')
-          .toString()
-          .trim();
+      final sourceBlendId =
+          (widget.drinkData['sourceBlendId'] ?? '').toString().trim();
 
-      final sourceBlendNameRaw = (widget.drinkData['sourceBlendName'] ?? '')
-          .toString()
-          .trim();
+      final sourceBlendNameRaw =
+          (widget.drinkData['sourceBlendName'] ?? '').toString().trim();
 
       const Map<String, String> sourceBlendOverrides = {
         'قهوة اسبريسو': 'توليفة اسبريسو',
@@ -287,11 +285,11 @@ class _DrinkDialogState extends State<DrinkDialog> {
           'spiced': _isTurkish ? _spiced : false,
           'cost_basis': (_isTurkish && _spiced)
               ? (_supportsServingChoice && _serving == Serving.dbl
-                    ? 'spicedDoubleCupCost'
-                    : 'spicedCupCost')
+                  ? 'spicedDoubleCupCost'
+                  : 'spicedCupCost')
               : (_supportsServingChoice && _serving == Serving.dbl
-                    ? 'doubleCost'
-                    : 'costPrice'),
+                  ? 'doubleCost'
+                  : 'costPrice'),
 
           'consumption': (totalConsumption > 0)
               ? {
@@ -299,8 +297,8 @@ class _DrinkDialogState extends State<DrinkDialog> {
                   'sourceBlendName': resolvedSourceBlendName,
                   'usedAmountPerUnit': isDouble
                       ? (_doubleUsedAmount > 0
-                            ? _doubleUsedAmount
-                            : (usedAmount ?? 0.0) * 2.0)
+                          ? _doubleUsedAmount
+                          : (usedAmount ?? 0.0) * 2.0)
                       : (usedAmount ?? 0.0),
                   'serving': _serving == Serving.dbl ? 'double' : 'single',
                   'totalConsumed': totalConsumption,
@@ -326,253 +324,191 @@ class _DrinkDialogState extends State<DrinkDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: bottomInset + 12),
-      child: SafeArea(
-        child: Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 24,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.zero,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(18),
-                    ),
-                    child: Stack(
-                      children: [
-                        Image.asset(
-                          _image,
-                          height: 140,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                        Container(
-                          height: 140,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.15),
-                                Colors.black.withValues(alpha: 0.55),
-                              ],
-                            ),
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final viewInsets =
+        EdgeInsets.fromViewPadding(view.viewInsets, view.devicePixelRatio);
+    final bottomInset = viewInsets.bottom;
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(viewInsets: viewInsets),
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: bottomInset + 12),
+        child: SafeArea(
+          child: Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.zero,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(18),
+                      ),
+                      child: Stack(
+                        children: [
+                          Image.asset(
+                            _image,
+                            height: 140,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
                           ),
-                        ),
-                        Positioned.fill(
-                          child: Center(
-                            child: Text(
-                              _name,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 27,
-                                fontWeight: FontWeight.w800,
+                          Container(
+                            height: 140,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.15),
+                                  Colors.black.withValues(alpha: 0.55),
+                                ],
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                          Positioned.fill(
+                            child: Center(
+                              child: Text(
+                                _name,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 27,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
 
-                  // Body
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        if (_supportsServingChoice) ...[
-                          Align(
-                            alignment: Alignment.center,
-                            child: SegmentedButton<Serving>(
-                              segments: const [
-                                ButtonSegment(
-                                  value: Serving.single,
-                                  label: Text('سنجل'),
-                                  icon: Icon(Icons.coffee_outlined),
-                                ),
-                                ButtonSegment(
-                                  value: Serving.dbl,
-                                  label: Text('دوبل'),
-                                  icon: Icon(Icons.coffee),
-                                ),
-                              ],
-                              selected: {_serving},
-                              onSelectionChanged: _busy
-                                  ? null
-                                  : (s) => setState(() => _serving = s.first),
-                              showSelectedIcon: false,
+                    // Body
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          if (_supportsServingChoice) ...[
+                            Align(
+                              alignment: Alignment.center,
+                              child: SegmentedButton<Serving>(
+                                segments: const [
+                                  ButtonSegment(
+                                    value: Serving.single,
+                                    label: Text('سنجل'),
+                                    icon: Icon(Icons.coffee_outlined),
+                                  ),
+                                  ButtonSegment(
+                                    value: Serving.dbl,
+                                    label: Text('دوبل'),
+                                    icon: Icon(Icons.coffee),
+                                  ),
+                                ],
+                                selected: {_serving},
+                                onSelectionChanged: _busy
+                                    ? null
+                                    : (s) => setState(() => _serving = s.first),
+                                showSelectedIcon: false,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
+                            const SizedBox(height: 12),
+                          ],
 
-                        if (_isCoffeeMix) ...[
-                          Align(
-                            alignment: Alignment.center,
-                            child: SegmentedButton<String>(
-                              segments: const [
-                                ButtonSegment(
-                                  value: 'water',
-                                  label: Text('مياه'),
-                                  icon: Icon(Icons.water_drop_outlined),
-                                ),
-                                ButtonSegment(
-                                  value: 'milk',
-                                  label: Text('لبن'),
-                                  icon: Icon(Icons.local_drink),
-                                ),
-                              ],
-                              selected: {_mix},
-                              onSelectionChanged: _busy
-                                  ? null
-                                  : (s) => setState(() => _mix = s.first),
-                              showSelectedIcon: false,
+                          if (_isCoffeeMix) ...[
+                            Align(
+                              alignment: Alignment.center,
+                              child: SegmentedButton<String>(
+                                segments: const [
+                                  ButtonSegment(
+                                    value: 'water',
+                                    label: Text('مياه'),
+                                    icon: Icon(Icons.water_drop_outlined),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'milk',
+                                    label: Text('لبن'),
+                                    icon: Icon(Icons.local_drink),
+                                  ),
+                                ],
+                                selected: {_mix},
+                                onSelectionChanged: _busy
+                                    ? null
+                                    : (s) => setState(() => _mix = s.first),
+                                showSelectedIcon: false,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
+                            const SizedBox(height: 12),
+                          ],
 
-                        // === Toggles row ===
-                        Row(
-                          children: [
-                            if (_isTurkish) ...[
+                          // === Toggles row ===
+                          Row(
+                            children: [
+                              if (_isTurkish) ...[
+                                Expanded(
+                                  child: ToggleCard(
+                                    title: 'محوّج',
+                                    value: _spiced,
+                                    onChanged: _busy
+                                        ? (_) {}
+                                        : (v) => setState(() => _spiced = v),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
                               Expanded(
                                 child: ToggleCard(
-                                  title: 'محوّج',
-                                  value: _spiced,
+                                  title: 'ضيافة',
+                                  value: _isComplimentary,
                                   onChanged: _busy
                                       ? (_) {}
-                                      : (v) => setState(() => _spiced = v),
+                                      : (v) => _setComplimentary(v),
                                 ),
                               ),
                               const SizedBox(width: 12),
-                            ],
-                            Expanded(
-                              child: ToggleCard(
-                                title: 'ضيافة',
-                                value: _isComplimentary,
-                                onChanged: _busy
-                                    ? (_) {}
-                                    : (v) => _setComplimentary(v),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ToggleCard(
-                                title: 'أجِّل',
-                                value: _isDeferred,
-                                onChanged: _busy
-                                    ? (_) {}
-                                    : (v) => _setDeferred(v),
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      DeferredNoteField(
-                        controller: _noteCtrl,
-                        visible: _isDeferred,
-                        enabled: !_busy,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                        // سعر الكوب
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'سعر الكوب',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                            Text(
-                              '${_unitPriceEffective.toStringAsFixed(2)} جم',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Quantity stepper
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            IconButton.filledTonal(
-                              onPressed: _busy
-                                  ? null
-                                  : () {
-                                      if (_qty > 1) setState(() => _qty -= 1);
-                                    },
-                              icon: const Icon(Icons.remove),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: Text(
-                                '$_qty',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
+                              Expanded(
+                                child: ToggleCard(
+                                  title: 'أجِّل',
+                                  value: _isDeferred,
+                                  onChanged:
+                                      _busy ? (_) {} : (v) => _setDeferred(v),
                                 ),
                               ),
-                            ),
-                            IconButton.filledTonal(
-                              onPressed: _busy
-                                  ? null
-                                  : () => setState(() => _qty += 1),
-                              icon: const Icon(Icons.add),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // إجمالي السعر
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.brown.shade50,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.brown.shade100),
+                            ],
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
+
+                          DeferredNoteField(
+                            controller: _noteCtrl,
+                            visible: _isDeferred,
+                            enabled: !_busy,
                           ),
-                          child: Row(
+
+                          const SizedBox(height: 12),
+
+                          // سعر الكوب
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
-                                'الإجمالي',
+                                'سعر الكوب',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 16,
+                                  fontSize: 14,
                                 ),
                               ),
                               Text(
-                                _totalPrice.toStringAsFixed(2),
+                                '${_unitPriceEffective.toStringAsFixed(2)} جم',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14,
@@ -580,91 +516,159 @@ class _DrinkDialogState extends State<DrinkDialog> {
                               ),
                             ],
                           ),
-                        ),
+                          const SizedBox(height: 12),
 
-                        if (_fatal != null) ...[
-                          const SizedBox(height: 10),
+                          // Quantity stepper
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton.filledTonal(
+                                onPressed: _busy
+                                    ? null
+                                    : () {
+                                        if (_qty > 1) setState(() => _qty -= 1);
+                                      },
+                                icon: const Icon(Icons.remove),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Text(
+                                  '$_qty',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              IconButton.filledTonal(
+                                onPressed: _busy
+                                    ? null
+                                    : () => setState(() => _qty += 1),
+                                icon: const Icon(Icons.add),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // إجمالي السعر
                           Container(
-                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange.shade200),
+                              color: Colors.brown.shade50,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.brown.shade100),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
                             ),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Icon(
-                                  Icons.warning_amber,
-                                  color: Colors.orange,
+                                const Text(
+                                  'الإجمالي',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _fatal!,
-                                    style: const TextStyle(
-                                      color: Colors.orange,
-                                    ),
+                                Text(
+                                  _totalPrice.toStringAsFixed(2),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
 
-                  const Divider(height: 1),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _busy
-                                ? null
-                                : () => Navigator.pop(context),
-                            child: const Text(
-                              'إلغاء',
-                              style: TextStyle(
-                                color: Color(0xFF543824),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
+                          if (_fatal != null) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border:
+                                    Border.all(color: Colors.orange.shade200),
                               ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FilledButton(
-                            style: ButtonStyle(
-                              backgroundColor: WidgetStateProperty.all(
-                                const Color(0xFF543824),
-                              ),
-                            ),
-                            onPressed: _busy ? null : _commitSale,
-                            child: _busy
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text(
-                                    'تأكيد',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.warning_amber,
+                                    color: Colors.orange,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _fatal!,
+                                      style: const TextStyle(
+                                        color: Colors.orange,
+                                      ),
                                     ),
                                   ),
-                          ),
-                        ),
-                      ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed:
+                                  _busy ? null : () => Navigator.pop(context),
+                              child: const Text(
+                                'إلغاء',
+                                style: TextStyle(
+                                  color: Color(0xFF543824),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton(
+                              style: ButtonStyle(
+                                backgroundColor: WidgetStateProperty.all(
+                                  const Color(0xFF543824),
+                                ),
+                              ),
+                              onPressed: _busy ? null : _commitSale,
+                              child: _busy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'تأكيد',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
