@@ -14,7 +14,7 @@ import 'Presentation/features/cashier_page/domain/cashier_repository.dart';
 import 'Presentation/features/cashier_page/viewmodel/cashier_viewmodel.dart';
 // import 'Presentation/splash screen/splash_screen.dart';
 import 'core/services/firebase_options.dart';
-
+//main
 Future<void> main() async {
   runZonedGuarded(
     () async {
