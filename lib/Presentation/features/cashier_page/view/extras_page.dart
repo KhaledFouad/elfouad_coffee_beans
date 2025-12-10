@@ -260,7 +260,9 @@ class _ExtraCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.40),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.20),
+                  ),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -347,9 +349,6 @@ Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
   final qty = int.tryParse(ctrl.text.trim()) ?? 1;
   await _sellExtraTransaction(context, item.id, qty);
   if (!context.mounted) return;
-  ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text('تم بيع $qty × ${item.name}')));
 }
 
 /// بيع + خصم مخزون + تسجيل في sales (ترانزاكشن)

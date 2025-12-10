@@ -2,8 +2,8 @@
 // ignore_for_file: unused_local_variable, unused_element
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
-import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/deferred_note_field.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
@@ -22,7 +22,18 @@ enum _PadTarget { grams, money, none }
 class SingleDialog extends StatefulWidget {
   final SingleGroup group;
 
-  const SingleDialog({super.key, required this.group});
+  /// لو true يبقى الشاشة دي شغالة كـ "إضافة للسلة" بس
+  final bool cartMode;
+
+  /// كول باك يُستدعى عند إضافة صنف جديد للسلة
+  final ValueChanged<CartLine>? onAddToCart;
+
+  const SingleDialog({
+    super.key,
+    required this.group,
+    this.cartMode = false,
+    this.onAddToCart,
+  });
 
   @override
   State<SingleDialog> createState() => _SingleDialogState();
@@ -44,15 +55,8 @@ class _SingleDialogState extends State<SingleDialog> {
 
   final TextEditingController _gramsCtrl = TextEditingController();
   final TextEditingController _moneyCtrl = TextEditingController();
-  final TextEditingController _noteCtrl = TextEditingController();
 
   CalcMode _mode = CalcMode.byGrams;
-
-  // ضيافة
-  bool _isComplimentary = false;
-
-  // أجِّل
-  bool _isDeferred = false;
 
   // محوّج
   bool _isSpiced = false;
@@ -65,31 +69,6 @@ class _SingleDialogState extends State<SingleDialog> {
   // --- نومباد داخلي ---
   bool _showPad = false;
   _PadTarget _padTarget = _PadTarget.none;
-
-  // تنافي ضيافة وأجِّل
-  void _setComplimentary(bool v) {
-    setState(() {
-      _isComplimentary = v;
-      if (v) {
-        _isDeferred = false; // تنافي
-        // بما إن الضيافة = 0 جنيه، نقفّل وضع "حسب المبلغ"
-        _mode = CalcMode.byGrams;
-        _moneyCtrl.clear();
-        if (_showPad && _padTarget == _PadTarget.money) _closePad();
-      }
-    });
-  }
-
-  void _setDeferred(bool v) {
-    setState(() {
-      _isDeferred = v;
-      if (v) {
-        _isComplimentary = false; // تنافي
-      } else {
-        _noteCtrl.clear();
-      }
-    });
-  }
 
   int _parseInt(String s) {
     final cleaned = s.replaceAll(RegExp(r'[^0-9]'), '');
@@ -216,7 +195,6 @@ class _SingleDialogState extends State<SingleDialog> {
     if (_mode == CalcMode.byMoney) {
       final money = _parseDouble(_moneyCtrl.text);
       if (money <= 0) return 0;
-      if (_isComplimentary) return 0; // ضيافة = 0
       final effectivePerG = _sellPerG + (_isSpiced ? _spicePricePerG : 0.0);
       if (effectivePerG <= 0) return 0;
       final g = (money / effectivePerG).floor();
@@ -237,16 +215,71 @@ class _SingleDialogState extends State<SingleDialog> {
       (_isSpiced && _canSpice) ? (_grams * _spiceCostPerG) : 0.0;
   double get _ginsengCostAmount => _ginsengGrams * _ginsengCostPerG;
 
-  double get _pricePerG => _isComplimentary
-      ? 0.0
-      : (_sellPerG + (_isSpiced && _canSpice ? _spicePricePerG : 0.0));
+  double get _pricePerG =>
+      _sellPerG + (_isSpiced && _canSpice ? _spicePricePerG : 0.0);
 
-  double get _totalPrice => _isComplimentary
-      ? 0.0
-      : (_beansAmount + _spiceAmount + _ginsengPriceAmount);
+  double get _totalPrice => _beansAmount + _spiceAmount + _ginsengPriceAmount;
 
   double get _totalCost =>
       _beansCostAmount + _spiceCostAmount + _ginsengCostAmount;
+
+  /// يبني سطر سلة (CartLine)
+  CartLine _buildCartLine() {
+    final sel = _selected;
+    if (sel == null) {
+      throw UserFriendly('اختر درجة التحميص/النوع أولاً.');
+    }
+    final grams = _grams;
+    if (grams <= 0) {
+      throw UserFriendly('من فضلك أدخل كمية صحيحة بالجرام أو السعر.');
+    }
+
+    final price = _totalPrice;
+    final cost = _totalCost;
+    final gramsDouble = grams.toDouble();
+
+    final impacts = <StockImpact>[
+      StockImpact(
+        collection: 'singles',
+        docId: sel.id,
+        field: 'stock',
+        amount: gramsDouble,
+        label: sel.name,
+      ),
+    ];
+
+    final meta = <String, dynamic>{
+      'spiced': _isSpiced && _canSpice,
+      'ginseng_grams': _ginsengGrams,
+      'mode': _mode.name,
+      'price_per_g_effective': _pricePerG,
+      'spice_price_per_kg': _spicesPricePerKg,
+      'spice_cost_per_kg': _spicesCostPerKg,
+    };
+
+    final variant = sel.variant.trim().isEmpty ? null : sel.variant.trim();
+
+    return CartLine(
+      id: CartLine.newId(),
+      productId: sel.id,
+      name: sel.name,
+      variant: variant,
+      type: 'single',
+      unit: 'g',
+      image: sel.image,
+      quantity: gramsDouble,
+      grams: gramsDouble,
+      unitPrice: gramsDouble > 0 ? (price / gramsDouble) : 0.0,
+      unitCost: gramsDouble > 0 ? (cost / gramsDouble) : 0.0,
+      lineTotalPrice: price,
+      lineTotalCost: cost,
+      isComplimentary: false,
+      isDeferred: false,
+      note: '',
+      meta: meta,
+      impacts: impacts,
+    );
+  }
 
   // ===== نومباد داخلي =====
   void _openPad(_PadTarget target) {
@@ -383,10 +416,8 @@ class _SingleDialogState extends State<SingleDialog> {
     );
   }
 
-  // === كروت التبديل بنفس ديزاين المشروبات ===
-
+  // === كارت الجينسنج ===
   Widget _ginsengCard() {
-    // Ginseng add-on stays available even if spices are disabled.
     return Container(
       decoration: BoxDecoration(
         color: Colors.brown.shade50,
@@ -436,190 +467,32 @@ class _SingleDialogState extends State<SingleDialog> {
   Future<void> _commitSale() async {
     final sel = _selected;
     if (sel == null) {
-      setState(() => _fatal = 'اختر درجة التحميص.');
+      setState(() => _fatal = 'اختر درجة التحميص أولاً.');
       await showErrorDialog(context, _fatal!);
       return;
     }
     if (_grams <= 0) {
-      setState(() => _fatal = 'من فضلك أدخل كمية صحيحة بالجرام.');
+      setState(() => _fatal = 'من فضلك أدخل كمية صحيحة بالجرام أو السعر.');
       await showErrorDialog(context, _fatal!);
       return;
     }
 
+    // هنا بنضيف للسلة فقط، مفيش مبيعات/مخزون من جوه الديالوج
     setState(() {
       _busy = true;
       _fatal = null;
     });
-
-    final db = FirebaseFirestore.instance;
-    final itemRef = db.collection('singles').doc(sel.id);
-
     try {
-      await db.runTransaction((txn) async {
-        final snap = await txn.get(itemRef);
-        if (!snap.exists) throw UserFriendly('العنصر غير موجود بالمخزون.');
-
-        final data = snap.data() as Map<String, dynamic>;
-        final currentStock = (data['stock'] is num)
-            ? (data['stock'] as num).toDouble()
-            : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
-
-        final need = _grams.toDouble();
-        if (currentStock < need) {
-          final avail = currentStock.toStringAsFixed(0);
-          final want = need.toStringAsFixed(0);
-          throw UserFriendly(
-            'المخزون غير كافٍ.\nالمتاح: $avail جم • المطلوب: $want جم',
-          );
-        }
-
-        final newStock = currentStock - need;
-        txn.update(itemRef, {'stock': newStock});
-
-        // أسعار التحويج من الداتابيز
-        final spicesPricePerKg = (data['spicesPrice'] is num)
-            ? (data['spicesPrice'] as num).toDouble()
-            : double.tryParse('${data['spicesPrice'] ?? ''}') ?? 0.0;
-
-        final spicesCostPerKg = (data['spicesCost'] is num)
-            ? (data['spicesCost'] as num).toDouble()
-            : double.tryParse('${data['spicesCost'] ?? ''}') ?? 0.0;
-
-        final canSpiceNow = _canSpice;
-        final spicePricePerG = (_isSpiced && canSpiceNow)
-            ? (spicesPricePerKg / 1000.0)
-            : 0.0;
-        final spiceCostPerG = (_isSpiced && canSpiceNow)
-            ? (spicesCostPerKg / 1000.0)
-            : 0.0;
-
-        // أجزاء السعر/التكلفة
-        final beansPriceAmount = _sellPerG * need;
-        final spicePriceAmount = (_isSpiced && canSpiceNow)
-            ? (spicePricePerG * need)
-            : 0.0;
-        final ginsengPriceAmount = _isComplimentary
-            ? 0.0
-            : (_ginsengGrams * _ginsengPricePerG);
-
-        final beansCostAmount = _costPerG * need;
-        final spiceCostAmount = (_isSpiced && canSpiceNow)
-            ? (spiceCostPerG * need)
-            : 0.0;
-        final ginsengCostAmount = _ginsengGrams * _ginsengCostPerG;
-
-        // إجماليات
-        final isComp = _isComplimentary;
-        final isDeferred = _isDeferred && !isComp; // لا تؤجَّل الضيافة
-        final wouldTotalPrice = isComp
-            ? 0.0
-            : (beansPriceAmount + spicePriceAmount + ginsengPriceAmount);
-        final totalCostOut =
-            beansCostAmount + spiceCostAmount + ginsengCostAmount;
-        final profitExpected = (isComp || isDeferred)
-            ? 0.0
-            : wouldTotalPrice - totalCostOut;
-        final totalPriceNormal =
-            beansPriceAmount + spicePriceAmount + ginsengPriceAmount;
-
-        final totalPriceOut = (isComp || isDeferred) ? 0.0 : totalPriceNormal;
-
-        final profitOut = (isComp || isDeferred)
-            ? 0.0
-            : (totalPriceOut - totalCostOut);
-
-        final saleRef = db.collection('sales').doc();
-        final note = isDeferred ? _noteCtrl.text.trim() : '';
-        txn.set(saleRef, {
-          'created_at': FieldValue.serverTimestamp(),
-          'created_by': 'cashier_web',
-          'type': 'single',
-          'item_id': sel.id,
-          'name': sel.name,
-          'variant': sel.variant,
-          'unit': 'g',
-          'grams': need,
-
-          // حالات
-          'is_complimentary': isComp,
-          'is_deferred': isDeferred,
-          'paid': isDeferred ? false : true,
-          'due_amount': isDeferred ? wouldTotalPrice : 0.0,
-
-          // بن
-          'price_per_kg': _sellPerKg,
-          'price_per_g': isComp
-              ? 0.0
-              : (_sellPerG +
-                    ((_isSpiced && canSpiceNow) ? spicePricePerG : 0.0)),
-          'beans_amount': beansPriceAmount,
-
-          // تحويج (سعر + تكلفة)
-          'is_spiced': _isSpiced && canSpiceNow,
-          'spice_rate_per_kg': (_isSpiced && canSpiceNow)
-              ? spicesPricePerKg
-              : 0.0,
-          'spice_amount': spicePriceAmount,
-          'spice_cost_per_kg': (_isSpiced && canSpiceNow)
-              ? spicesCostPerKg
-              : 0.0,
-          'spice_cost_amount': spiceCostAmount,
-
-          // جينسنج
-          'ginseng_grams': _ginsengGrams,
-          'ginseng_price_per_g': _ginsengPricePerG,
-          'ginseng_cost_per_g': _ginsengCostPerG,
-          'ginseng_price_amount': isComp ? 0.0 : ginsengPriceAmount,
-          'ginseng_cost_amount': ginsengCostAmount,
-
-          // تكاليف
-          'cost_per_kg': _costPerKg,
-          'cost_per_g':
-              _costPerG + ((_isSpiced && canSpiceNow) ? spiceCostPerG : 0.0),
-          'total_cost': totalCostOut,
-
-          // إجمالي
-          'total_price': wouldTotalPrice, // ⬅️ مش بنصفّر في الأجل
-          'profit_total': (isComp || isDeferred) ? 0.0 : profitExpected,
-          'profit_expected': profitExpected,
-
-          'stock_after': newStock,
-          'calc_mode': _mode == CalcMode.byMoney ? 'by_money' : 'by_grams',
-          'entered_money': _mode == CalcMode.byMoney
-              ? _parseDouble(_moneyCtrl.text)
-              : 0.0,
-          'note': note,
-        });
-      });
-
+      final line = _buildCartLine();
+      widget.onAddToCart?.call(line);
       if (!mounted) return;
-      final nav = Navigator.of(context, rootNavigator: true);
-      nav.pop();
-      nav.pushNamedAndRemoveUntil('/', (r) => false);
-      ScaffoldMessenger.of(nav.context).showSnackBar(
-        const SnackBar(content: Text('تم تسجيل البيع وخصم المخزون')),
-      );
-    } catch (e, st) {
-      logError(e, st);
-      final msg = e is UserFriendly
-          ? e.message
-          : (e is FirebaseException
-                ? 'خطأ في قاعدة البيانات (${e.code})'
-                : 'حدث خطأ غير متوقع.');
-      if (!mounted) return;
-      await showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('تعذر إتمام العملية'),
-          content: Text(msg),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('حسناً'),
-            ),
-          ],
-        ),
-      );
+      Navigator.pop(context, line);
+    } catch (e) {
+      final msg = e is UserFriendly ? e.message : 'حدث خطأ غير متوقع.';
+      if (mounted) {
+        setState(() => _fatal = msg);
+        await showErrorDialog(context, msg);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -631,8 +504,10 @@ class _SingleDialogState extends State<SingleDialog> {
     final image = widget.group.image;
 
     final view = WidgetsBinding.instance.platformDispatcher.views.first;
-    final viewInsets =
-        EdgeInsets.fromViewPadding(view.viewInsets, view.devicePixelRatio);
+    final viewInsets = EdgeInsets.fromViewPadding(
+      view.viewInsets,
+      view.devicePixelRatio,
+    );
     final bottomInset = viewInsets.bottom;
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(viewInsets: viewInsets),
@@ -641,402 +516,374 @@ class _SingleDialogState extends State<SingleDialog> {
         curve: Curves.easeOut,
         padding: EdgeInsets.only(bottom: bottomInset + 12),
         child: SafeArea(
-        child: Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 24,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.zero,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(18),
-                    ),
-                    child: Stack(
-                      children: [
-                        Image.asset(
-                          image,
-                          height: 140,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                        Container(
-                          height: 140,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.15),
-                                Colors.black.withValues(alpha: 0.55),
-                              ],
-                            ),
+          child: Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.zero,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(18),
+                      ),
+                      child: Stack(
+                        children: [
+                          Image.asset(
+                            image,
+                            height: 140,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
                           ),
-                        ),
-                        Positioned.fill(
-                          child: Center(
-                            child: Text(
-                              name,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 27,
-                                fontWeight: FontWeight.w800,
+                          Container(
+                            height: 140,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.15),
+                                  Colors.black.withValues(alpha: 0.55),
+                                ],
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                          Positioned.fill(
+                            child: Center(
+                              child: Text(
+                                name,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 27,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
 
-                  // Body
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        if (_roastOptions.isNotEmpty) ...[
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: _roastOptions.map((r) {
-                                final sel = widget.group.variants[r];
-                                final isSelected = (_roast ?? '') == r;
-                                final stock = (sel == null)
-                                    ? 0.0
-                                    : (_stockByVariantId[sel.id] ?? 0.0);
-                                final disabled =
-                                    !_stocksLoading && stock <= 0.0;
+                    // Body
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          if (_roastOptions.isNotEmpty) ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: _roastOptions.map((r) {
+                                  final sel = widget.group.variants[r];
+                                  final isSelected = (_roast ?? '') == r;
+                                  final stock = (sel == null)
+                                      ? 0.0
+                                      : (_stockByVariantId[sel.id] ?? 0.0);
+                                  final disabled =
+                                      !_stocksLoading && stock <= 0.0;
 
-                                final label = StringBuffer()
-                                  ..write(r.isEmpty ? 'بدون' : r);
-                                if (disabled) label.write(' (غير متاح)');
+                                  final label = StringBuffer()
+                                    ..write(r.isEmpty ? 'بدون' : r);
+                                  if (disabled) label.write(' (غير متاح)');
 
-                                return ChoiceChip(
-                                  label: Text(
-                                    label.toString(),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                  return ChoiceChip(
+                                    label: Text(
+                                      label.toString(),
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
+                                    selected: isSelected,
+                                    onSelected: (_busy || disabled)
+                                        ? null
+                                        : (v) {
+                                            if (!v) return;
+                                            setState(() => _roast = r);
+                                          },
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    labelPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    side: BorderSide(
+                                      color: disabled
+                                          ? Colors.grey.shade300
+                                          : Colors.brown.shade200,
+                                    ),
+                                    selectedColor: Colors.brown.shade100,
+                                    backgroundColor: disabled
+                                        ? Colors.grey.shade100
+                                        : null,
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
+                          // === محوّج فقط في الصف ===
+                          Row(
+                            children: [
+                              if (_canSpice)
+                                Expanded(
+                                  child: ToggleCard(
+                                    title: 'محوّج',
+                                    value: _isSpiced,
+                                    onChanged: (v) =>
+                                        setState(() => _isSpiced = v),
                                   ),
-                                  selected: isSelected,
-                                  onSelected: (_busy || disabled)
-                                      ? null
-                                      : (v) {
-                                          if (!v) return;
-                                          setState(() => _roast = r);
-                                        },
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  labelPadding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
-                                  side: BorderSide(
-                                    color: disabled
-                                        ? Colors.grey.shade300
-                                        : Colors.brown.shade200,
-                                  ),
-                                  selectedColor: Colors.brown.shade100,
-                                  backgroundColor: disabled
-                                      ? Colors.grey.shade100
-                                      : null,
-                                );
-                              }).toList(),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // === Ginseng add-on ===
+                          _ginsengCard(),
+                          const SizedBox(height: 12),
+
+                          // وضع الحساب
+                          Align(
+                            alignment: Alignment.center,
+                            child: SegmentedButton<CalcMode>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: CalcMode.byGrams,
+                                  label: Text('حسب الوزن'),
+                                  icon: Icon(Icons.scale),
+                                ),
+                                ButtonSegment(
+                                  value: CalcMode.byMoney,
+                                  label: Text('حسب المبلغ'),
+                                  icon: Icon(Icons.payments_outlined),
+                                ),
+                              ],
+                              selected: {_mode},
+                              onSelectionChanged: _busy
+                                  ? null
+                                  : (s) {
+                                      setState(() {
+                                        _mode = s.first;
+                                        if (_showPad) {
+                                          if (_padTarget == _PadTarget.money &&
+                                              _mode != CalcMode.byMoney) {
+                                            _closePad();
+                                          }
+                                          if (_padTarget == _PadTarget.grams &&
+                                              _mode != CalcMode.byGrams) {
+                                            _closePad();
+                                          }
+                                        }
+                                      });
+                                    },
+                              showSelectedIcon: false,
                             ),
                           ),
                           const SizedBox(height: 12),
-                        ],
 
-                        // === محوّج + ضيافة + أجِّل في صف واحد ===
-                        Row(
-                          children: [
-                            if (_canSpice) ...[
-                              Expanded(
-                                child: ToggleCard(
-                                  title: 'محوّج',
-                                  value: _isSpiced,
-                                  onChanged: (v) =>
-                                      setState(() => _isSpiced = v),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                            ],
-                            Expanded(
-                              child: ToggleCard(
-                                title: 'ضيافة',
-                                value: _isComplimentary,
-                                onChanged: (v) => _setComplimentary(v),
+                          // مدخلات الوزن/السعر
+                          if (_mode == CalcMode.byGrams) ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                children: [
+                                  const Text('الكمية (جم)'),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _gramsCtrl,
+                                      readOnly: true,
+                                      textAlign: TextAlign.center,
+                                      onTap: _busy
+                                          ? null
+                                          : () => _openPad(_PadTarget.grams),
+                                      decoration: const InputDecoration(
+                                        hintText: 'مثال: 250',
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 10,
+                                        ),
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ToggleCard(
-                                title: 'أجِّل',
-                                value: _isDeferred,
-                                onChanged: (v) => _setDeferred(v),
+                          ] else ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                children: [
+                                  const Text('المبلغ (ج.م)'),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _moneyCtrl,
+                                      readOnly: true,
+                                      textAlign: TextAlign.center,
+                                      onTap: _busy
+                                          ? null
+                                          : () => _openPad(_PadTarget.money),
+                                      decoration: const InputDecoration(
+                                        hintText: 'مثال: 100',
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 10,
+                                        ),
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                '≈ الجرامات المحسوبة: ${_grams.toString()} جم',
+                                style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 20,
+                                ),
                               ),
                             ),
                           ],
-                        ),
-                        DeferredNoteField(
-                          controller: _noteCtrl,
-                          visible: _isDeferred,
-                          enabled: !_busy,
-                        ),
-                        const SizedBox(height: 12),
 
-                        // === Ginseng add-on ===
-                        _ginsengCard(),
-                        const SizedBox(height: 12),
-
-                        // وضع الحساب
-                        Align(
-                          alignment: Alignment.center,
-                          child: SegmentedButton<CalcMode>(
-                            segments: const [
-                              ButtonSegment(
-                                value: CalcMode.byGrams,
-                                label: Text('حسب الوزن'),
-                                icon: Icon(Icons.scale),
-                              ),
-                              ButtonSegment(
-                                value: CalcMode.byMoney,
-                                label: Text('حسب المبلغ'),
-                                icon: Icon(Icons.payments_outlined),
-                              ),
-                            ],
-                            selected: {_mode},
-                            onSelectionChanged: _busy
-                                ? null
-                                : (s) {
-                                    setState(() {
-                                      _mode = s.first;
-                                      // ممنوع "حسب المبلغ" مع ضيافة
-                                      if (_mode == CalcMode.byMoney &&
-                                          _isComplimentary) {
-                                        _mode = CalcMode.byGrams;
-                                      }
-                                      if (_showPad) {
-                                        if (_padTarget == _PadTarget.money &&
-                                            _mode != CalcMode.byMoney) {
-                                          _closePad();
-                                        }
-                                        if (_padTarget == _PadTarget.grams &&
-                                            _mode != CalcMode.byGrams) {
-                                          _closePad();
-                                        }
-                                      }
-                                    });
-                                  },
-                            showSelectedIcon: false,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // مدخلات الوزن/السعر
-                        if (_mode == CalcMode.byGrams) ...[
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Row(
-                              children: [
-                                const Text('الكمية (جم)'),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _gramsCtrl,
-                                    readOnly: true,
-                                    textAlign: TextAlign.center,
-                                    onTap: _busy
-                                        ? null
-                                        : () => _openPad(_PadTarget.grams),
-                                    decoration: const InputDecoration(
-                                      hintText: 'مثال: 250',
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                        vertical: 12,
-                                        horizontal: 10,
-                                      ),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ] else ...[
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Row(
-                              children: [
-                                const Text('المبلغ (جم)'),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _moneyCtrl,
-                                    readOnly: true,
-                                    enabled: !_isComplimentary,
-                                    textAlign: TextAlign.center,
-                                    onTap: (_busy || _isComplimentary)
-                                        ? null
-                                        : () => _openPad(_PadTarget.money),
-                                    decoration: const InputDecoration(
-                                      hintText: 'مثال: 100',
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                        vertical: 12,
-                                        horizontal: 10,
-                                      ),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          const SizedBox(height: 12),
+                          _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
+                          _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
                           const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              '≈ الجرامات المحسوبة: ${_grams.toString()} جم',
-                              style: const TextStyle(
-                                color: Colors.black54,
-                                fontSize: 20,
-                              ),
+
+                          // الإجمالي
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.brown.shade50,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.brown.shade100),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'الإجمالي',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                Text(
+                                  _totalPrice.toStringAsFixed(2),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+
+                          if (_fatal != null) ...[
+                            const SizedBox(height: 10),
+                            _WarningBox(text: _fatal!),
+                          ],
+
+                          // النومباد
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 160),
+                            curve: Curves.easeOut,
+                            child: _showPad
+                                ? _numPad(
+                                    allowDot: _padTarget == _PadTarget.money,
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
                         ],
+                      ),
+                    ),
 
-                        const SizedBox(height: 12),
-                        _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
-                        _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
-                        const SizedBox(height: 8),
-
-                        // الإجمالي
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.brown.shade50,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.brown.shade100),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'الإجمالي',
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                _totalPrice.toStringAsFixed(2),
-                                style: const TextStyle(
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () => Navigator.pop(context),
+                              child: const Text(
+                                'إلغاء',
+                                style: TextStyle(
+                                  color: Color(0xFF543824),
                                   fontWeight: FontWeight.w600,
+                                  fontSize: 14,
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-
-                        if (_fatal != null) ...[
-                          const SizedBox(height: 10),
-                          _WarningBox(text: _fatal!),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton(
+                              style: ButtonStyle(
+                                backgroundColor: WidgetStateProperty.all(
+                                  const Color(0xFF543824),
+                                ),
+                              ),
+                              onPressed: _busy ? null : _commitSale,
+                              child: _busy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'تأكيد',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                            ),
+                          ),
                         ],
-
-                        // النومباد
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 160),
-                          curve: Curves.easeOut,
-                          child: _showPad
-                              ? _numPad(
-                                  allowDot: _padTarget == _PadTarget.money,
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-
-                  const Divider(height: 1),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _busy
-                                ? null
-                                : () => Navigator.pop(context),
-                            child: const Text(
-                              'إلغاء',
-                              style: TextStyle(
-                                color: Color(0xFF543824),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FilledButton(
-                            style: ButtonStyle(
-                              backgroundColor: WidgetStateProperty.all(
-                                const Color(0xFF543824),
-                              ),
-                            ),
-                            onPressed: _busy ? null : _commitSale,
-                            child: _busy
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text(
-                                    'تأكيد',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   @override
   void dispose() {
     _gramsCtrl.dispose();
     _moneyCtrl.dispose();
-    _noteCtrl.dispose();
     super.dispose();
   }
 }

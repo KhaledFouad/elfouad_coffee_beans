@@ -9,13 +9,13 @@ import 'js_safe_stub.dart' if (dart.library.js) 'js_safe_web.dart';
 String prettyError(Object error, [StackTrace? st]) {
   // أخطاءك الودّية
   if (error is Exception && error.runtimeType.toString() == 'UserFriendly') {
-    // لو عندك كلاس UserFriendly في ملفات أخرى (بنفس الاسم)
     try {
       final msg = (error as dynamic).message?.toString();
       if (msg != null && msg.trim().isNotEmpty) return msg;
     } catch (_) {}
   }
 
+  // Firebase
   if (error is FirebaseException) {
     final code = error.code.isNotEmpty ? ' (${error.code})' : '';
     final msg = error.message ?? 'خطأ من Firebase';
@@ -27,10 +27,27 @@ String prettyError(Object error, [StackTrace? st]) {
     return error.message?.toString() ?? 'Assertion error';
   }
 
-  // على الويب: جرّب تقرأ خصائص message/code إن كانت جايّة من JS
+  // على الويب: الأخطاء عادة تكون مغلّفة داخل JS Error
   if (kIsWeb) {
+    // 1) جرّب تفك التغليف: error.error هو الـ Dart error الحقيقي
+    final inner = getJsProp(error, 'error');
+    if (inner != null && !identical(inner, error)) {
+      final innerMsg = prettyError(inner, st);
+      if (innerMsg.isNotEmpty) return innerMsg;
+    }
+
+    // 2) جرّب خصائص message / code من الـ JS Error
     final m = getJsProp(error, 'message')?.toString();
     final c = getJsProp(error, 'code')?.toString();
+
+    const convertedMsg =
+        "Dart exception thrown from converted Future. Use the properties 'error' to fetch the boxed error and 'stack' to recover the stack trace.";
+
+    // لو الرسالة هي بالضبط نص converted Future ولسّا ما عرفنا شي مفيد
+    if (m == convertedMsg && (c == null || c.isEmpty)) {
+      return 'حدث خطأ غير متوقع أثناء تنفيذ العملية.';
+    }
+
     if ((m != null && m.isNotEmpty) || (c != null && c.isNotEmpty)) {
       return [m, c].where((e) => e != null && e.isNotEmpty).join(' • ');
     }
@@ -43,6 +60,7 @@ String prettyError(Object error, [StackTrace? st]) {
   }
   return s;
 }
+
 
 /// دialog موحّد لعرض الأخطاء
 Future<void> showErrorDialog(

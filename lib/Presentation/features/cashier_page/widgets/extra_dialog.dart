@@ -1,4 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 
@@ -6,7 +7,16 @@ class ExtraDialog extends StatefulWidget {
   final String extraId;
   final Map<String, dynamic> extraData;
 
-  const ExtraDialog({super.key, required this.extraId, required this.extraData});
+  final bool cartMode;
+  final ValueChanged<CartLine>? onAddToCart;
+
+  const ExtraDialog({
+    super.key,
+    required this.extraId,
+    required this.extraData,
+    this.cartMode = false,
+    this.onAddToCart,
+  });
 
   @override
   State<ExtraDialog> createState() => _ExtraDialogState();
@@ -47,15 +57,78 @@ class _ExtraDialogState extends State<ExtraDialog> {
   double get _totalPrice => _unitPrice * _qty;
   double get _totalCost => _unitCost * _qty;
 
+  CartLine _buildCartLine() {
+    if (_name.isEmpty) {
+      throw Exception('اسم الصنف غير موجود.');
+    }
+    if (_qty <= 0) {
+      throw Exception('الكمية غير صالحة.');
+    }
+
+    final variantRaw = (widget.extraData['variant'] as String?)?.trim() ?? '';
+    final variant = variantRaw.isEmpty ? null : variantRaw;
+
+    return CartLine(
+      id: CartLine.newId(),
+      productId: widget.extraId,
+      name: _name,
+      variant: variant,
+      type: 'extra',
+      unit: 'piece',
+      image: _image,
+      quantity: _qty.toDouble(),
+      grams: 0,
+      unitPrice: _unitPrice,
+      unitCost: _unitCost,
+      lineTotalPrice: _totalPrice,
+      lineTotalCost: _totalCost,
+      isComplimentary: false,
+      isDeferred: false,
+      note: '',
+      meta: {'variant': variant},
+      impacts: [
+        StockImpact(
+          collection: 'extras',
+          docId: widget.extraId,
+          field: 'stock_units',
+          amount: _qty.toDouble(),
+          label: _name,
+        ),
+      ],
+    );
+  }
+
   Future<void> _commitSale() async {
     if (_name.isEmpty) {
-      setState(() => _fatal = 'اسم الصنف غير موجود.');
+      setState(() => _fatal = 'Ø§Ø³Ù… Ø§Ù„ØµÙ†Ù ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.');
       await showErrorDialog(context, _fatal!);
       return;
     }
     if (_qty <= 0) {
-      setState(() => _fatal = 'الكمية غير صالحة.');
+      setState(() => _fatal = 'Ø§Ù„ÙƒÙ…ÙŠØ© ØºÙŠØ± ØµØ§Ù„Ø­Ø©.');
       await showErrorDialog(context, _fatal!);
+      return;
+    }
+
+    if (widget.cartMode || widget.onAddToCart != null) {
+      setState(() {
+        _busy = true;
+        _fatal = null;
+      });
+      try {
+        final line = _buildCartLine();
+        widget.onAddToCart?.call(line);
+        if (!mounted) return;
+        Navigator.pop(context, line);
+      } catch (e) {
+        final msg = e.toString();
+        if (mounted) {
+          setState(() => _fatal = msg);
+          await showErrorDialog(context, msg);
+        }
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
       return;
     }
 
@@ -67,7 +140,7 @@ class _ExtraDialogState extends State<ExtraDialog> {
       await db.runTransaction((tx) async {
         final snap = await tx.get(ref);
         if (!snap.exists) {
-          throw Exception('الصنف غير موجود.');
+          throw Exception('Ø§Ù„ØµÙ†Ù ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.');
         }
         final data = snap.data() ?? {};
         final curStock = _intOf(data['stock_units']);
@@ -75,7 +148,9 @@ class _ExtraDialogState extends State<ExtraDialog> {
         final unitCost = _numOf(data['cost_unit']);
 
         if (curStock < _qty) {
-          throw Exception('المخزون غير كافٍ: المتاح $curStock $_unitLabel');
+          throw Exception(
+            'Ø§Ù„Ù…Ø®Ø²ÙˆÙ† ØºÙŠØ± ÙƒØ§ÙÙ: Ø§Ù„Ù…ØªØ§Ø­ $curStock $_unitLabel',
+          );
         }
 
         final totalPrice = unitPrice * _qty;
@@ -122,8 +197,10 @@ class _ExtraDialogState extends State<ExtraDialog> {
   @override
   Widget build(BuildContext context) {
     final view = WidgetsBinding.instance.platformDispatcher.views.first;
-    final viewInsets =
-        EdgeInsets.fromViewPadding(view.viewInsets, view.devicePixelRatio);
+    final viewInsets = EdgeInsets.fromViewPadding(
+      view.viewInsets,
+      view.devicePixelRatio,
+    );
     final bottomInset = viewInsets.bottom;
     return Localizations.override(
       context: context,
@@ -154,7 +231,7 @@ class _ExtraDialogState extends State<ExtraDialog> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // ===== Header (نفس ستايل المشروبات) =====
+                        // ===== Header (Ù†ÙØ³ Ø³ØªØ§ÙŠÙ„ Ø§Ù„Ù…Ø´Ø±ÙˆØ¨Ø§Øª) =====
                         ClipRRect(
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(18),
@@ -259,8 +336,9 @@ class _ExtraDialogState extends State<ExtraDialog> {
                                 decoration: BoxDecoration(
                                   color: Colors.brown.shade50,
                                   borderRadius: BorderRadius.circular(14),
-                                  border:
-                                      Border.all(color: Colors.brown.shade100),
+                                  border: Border.all(
+                                    color: Colors.brown.shade100,
+                                  ),
                                 ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,

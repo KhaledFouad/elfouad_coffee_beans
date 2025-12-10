@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/cashier_screen.dart';
 import 'package:flutter/material.dart';
@@ -14,20 +14,20 @@ import 'Presentation/features/cashier_page/domain/cashier_repository.dart';
 import 'Presentation/features/cashier_page/viewmodel/cashier_viewmodel.dart';
 // import 'Presentation/splash screen/splash_screen.dart';
 import 'core/services/firebase_options.dart';
-//main
+
 Future<void> main() async {
   runZonedGuarded(
-    () async {
+    () async {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
       WidgetsFlutterBinding.ensureInitialized();
       FlutterError.onError = (FlutterErrorDetails details) {
         FlutterError.presentError(details);
-        debugPrint('⚠️ FlutterError: ${details.exceptionAsString()}');
+        debugPrint('FlutterError: ${details.exceptionAsString()}');
         if (details.stack != null) debugPrint(details.stack.toString());
       };
 
       ui.PlatformDispatcher.instance.onError =
           (Object error, StackTrace stack) {
-            debugPrint('⚠️ Uncaught async error: $error');
+            debugPrint('Uncaught async error: $error');
             debugPrint(stack.toString());
             return true;
           };
@@ -35,18 +35,6 @@ Future<void> main() async {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-
-      // if (kDebugMode) {
-      //   try {
-      //     // await clearDrinks();
-      //     await seedBiscuits();
-      //     // await seedSingles();
-      //     // await seedBlends();
-      //   } catch (e, st) {
-      //     debugPrint('❌ seeding failed: $e');
-      //     debugPrint(st.toString());
-      //   }
-      // }
 
       runApp(
         MultiProvider(
@@ -61,7 +49,7 @@ Future<void> main() async {
       );
     },
     (Object error, StackTrace stack) {
-      debugPrint('⚠️ Zone error: $error');
+      debugPrint('Zone error: $error');
       debugPrint(stack.toString());
     },
   );
@@ -72,15 +60,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      supportedLocales: [Locale('ar'), Locale('en')],
-      localizationsDelegates: [
+    return MaterialApp(
+      supportedLocales: const [Locale('ar'), Locale('en')],
+      localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       debugShowCheckedModeBanner: false,
-      home: CashierHome(),
+      home: const CashierHome(),
     );
   }
 }

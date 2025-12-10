@@ -356,3 +356,4 @@ IconData _iconForType(String type) {
       return Icons.receipt_long;
   }
 }
+

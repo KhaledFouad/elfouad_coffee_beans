@@ -17,7 +17,7 @@ class SalesHistoryPage extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => SalesHistoryViewModel(
         repository: SalesHistoryRepository(FirebaseFirestore.instance),
-      ),
+      )..initialize(),
       child: const _SalesHistoryView(),
     );
   }
@@ -29,46 +29,64 @@ class _SalesHistoryView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final viewModel = context.watch<SalesHistoryViewModel>();
+    final state = viewModel.state;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: _HistoryAppBar(viewModel: viewModel),
-        body: StreamBuilder<SalesHistoryState>(
-          stream: viewModel.historyStream(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        body: state.isEmpty && viewModel.isLoadingFirst
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  Expanded(
+                    child: state.isEmpty
+                        ? const Center(child: Text('لا يوجد عمليات بيع'))
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                            itemCount: state.groups.length,
+                            itemBuilder: (context, index) {
+                              final group = state.groups[index];
 
-            if (snapshot.hasError) {
-              return Center(
-                child: Text('خطأ في تحميل السجل: ${snapshot.error}'),
-              );
-            }
+                              // هنا بنجيب الإجمالي الحقيقي لليوم ده من الماب
+                              final overrideTotal =
+                                  state.fullTotalsByDay[group.label];
+                              final showLoading =
+                                  viewModel.isRangeTotalLoading &&
+                                  overrideTotal == null;
 
-            final state = snapshot.data;
-            if (state == null || state.isEmpty) {
-              return const Center(child: Text('لا يوجد عمليات بيع')); 
-            }
-
-            final groups = state.groups;
-            if (groups.isEmpty) {
-              return const Center(child: Text('لا يوجد عمليات في هذا النطاق'));
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-              itemCount: groups.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: HistoryDaySection(group: groups[index]),
-                );
-              },
-            );
-          },
-        ),
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: HistoryDaySection(
+                                  group: group,
+                                  overrideTotal: overrideTotal,
+                                  showTotalLoading: showLoading,
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  if (viewModel.isLoadingMore)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else if (viewModel.hasMore && !viewModel.isLoadingFirst)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 16,
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: viewModel.loadMore,
+                          child: const Text('عرض المزيد'),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
       ),
     );
   }
@@ -116,7 +134,7 @@ class _HistoryAppBar extends StatelessWidget implements PreferredSizeWidget {
           if (viewModel.isFiltered)
             IconButton(
               tooltip: 'مسح الفلتر',
-              onPressed: () => viewModel.setRange(null),
+              onPressed: () async => viewModel.setRange(null),
               icon: const Icon(Icons.clear),
             ),
         ],
@@ -146,15 +164,13 @@ class _HistoryAppBar extends StatelessWidget implements PreferredSizeWidget {
       lastDate: DateTime(now.year + 1),
       initialDateRange: init,
       locale: const Locale('ar'),
-      builder: (context, child) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: child!,
-      ),
+      builder: (context, child) =>
+          Directionality(textDirection: TextDirection.rtl, child: child!),
     );
 
     if (picked != null) {
       final normalized = viewModel.normalizePickerRange(picked);
-      viewModel.setRange(normalized);
+      await viewModel.setRange(normalized);
     }
   }
 }

@@ -1,70 +1,90 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
+class SalesPageResult {
+  SalesPageResult({
+    required this.docs,
+    required this.lastDoc,
+    required this.hasMore,
+  });
+
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs;
+  final QueryDocumentSnapshot<Map<String, dynamic>>? lastDoc;
+  final bool hasMore;
+}
 
 class SalesHistoryRepository {
   SalesHistoryRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
-  static const int _historyLimit = 500;
-  static const int _deferredLimit = 300;
 
-  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> watchSales({
+  static const int pageSize = 30;
+
+  // صفحة واحدة (للـ List مع "عرض المزيد")
+  Future<SalesPageResult> fetchPage({
     required DateTimeRange range,
-  }) {
-    final controller =
-        StreamController<List<QueryDocumentSnapshot<Map<String, dynamic>>>>.broadcast();
+    QueryDocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    final baseQuery = _firestore
+        .collection('sales')
+        .where(
+          'created_at',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+        )
+        .where('created_at', isLessThan: Timestamp.fromDate(range.end))
+        .orderBy('created_at', descending: true);
 
-    var rangeDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    var deferredDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    var settledDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? rangeSub;
-    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? deferredSub;
-    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? settledSub;
-
-    void emitCombined() {
-      if (controller.isClosed) return;
-      final merged = _mergeSnapshots(rangeDocs, deferredDocs, settledDocs);
-      controller.add(merged);
+    var pagedQuery = baseQuery.limit(pageSize);
+    if (startAfter != null) {
+      pagedQuery = pagedQuery.startAfterDocument(startAfter);
     }
 
-    controller.onListen = () {
-      rangeSub = _rangeQuery(range).snapshots().listen(
-        (snapshot) {
-          rangeDocs = snapshot.docs;
-          emitCombined();
-        },
-        onError: controller.addError,
-      );
+    final baseSnap = await pagedQuery.get();
+    var docs = baseSnap.docs;
 
-      deferredSub = _deferredQuery().snapshots().listen(
-        (snapshot) {
-          deferredDocs = snapshot.docs
-              .where((doc) => (doc.data()['paid'] ?? false) != true)
-              .toList();
-          emitCombined();
-        },
-        onError: controller.addError,
-      );
+    // أول صفحة: ضيف معاها الفواتير المؤجلة الغير مسددة
+    if (startAfter == null) {
+      final deferredSnap = await _firestore
+          .collection('sales')
+          .where('is_deferred', isEqualTo: true)
+          .where('paid', isEqualTo: false)
+          .get();
 
-      settledSub = _settledQuery(range).snapshots().listen(
-        (snapshot) {
-          settledDocs = snapshot.docs;
-          emitCombined();
-        },
-        onError: controller.addError,
-      );
-    };
+      if (deferredSnap.docs.isNotEmpty) {
+        final combined =
+            <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+        for (final d in docs) {
+          combined[d.id] = d;
+        }
+        for (final d in deferredSnap.docs) {
+          combined[d.id] = d;
+        }
+        docs = combined.values.toList()
+          ..sort((a, b) => _createdAtOf(b).compareTo(_createdAtOf(a)));
+      }
+    }
 
-    controller.onCancel = () async {
-      await rangeSub?.cancel();
-      await deferredSub?.cancel();
-      await settledSub?.cancel();
-      await controller.close();
-    };
+    final hasMore = baseSnap.docs.length == pageSize;
+    final lastDoc = baseSnap.docs.isNotEmpty ? baseSnap.docs.last : startAfter;
 
-    return controller.stream;
+    return SalesPageResult(docs: docs, lastDoc: lastDoc, hasMore: hasMore);
+  }
+
+  /// استعلام بدون Limit — بنستعمله علشان نحسب إجمالي اليوم كله للـ Summary
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchAllForRange({
+    required DateTimeRange range,
+  }) async {
+    final snap = await _firestore
+        .collection('sales')
+        .where(
+          'created_at',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+        )
+        .where('created_at', isLessThan: Timestamp.fromDate(range.end))
+        .orderBy('created_at', descending: true)
+        .get();
+
+    return snap.docs;
   }
 
   Future<void> settleDeferredSale(String saleId) async {
@@ -124,64 +144,6 @@ class SalesHistoryRepository {
     return double.tryParse(value?.toString() ?? '0') ?? 0;
   }
 
-  Query<Map<String, dynamic>> _rangeQuery(DateTimeRange range) {
-    final start = range.start.toUtc();
-    final end = range.end.toUtc();
-
-    return _firestore
-        .collection('sales')
-        .where('created_at', isLessThan: end)
-        .where('created_at', isGreaterThanOrEqualTo: start)
-        .orderBy('created_at', descending: true)
-        .limit(_historyLimit);
-  }
-
-  Query<Map<String, dynamic>> _deferredQuery() {
-    return _firestore
-        .collection('sales')
-        .where('is_deferred', isEqualTo: true)
-        .limit(_deferredLimit);
-  }
-
-  Query<Map<String, dynamic>> _settledQuery(DateTimeRange range) {
-    final start = range.start.toUtc();
-    final end = range.end.toUtc();
-
-    return _firestore
-        .collection('sales')
-        .where('settled_at', isGreaterThanOrEqualTo: start)
-        .where('settled_at', isLessThan: end)
-        .orderBy('settled_at', descending: true)
-        .limit(_historyLimit);
-  }
-
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _mergeSnapshots(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> primary,
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> deferred,
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> settled,
-  ) {
-    if (primary.isEmpty && deferred.isEmpty && settled.isEmpty) {
-      return const [];
-    }
-
-    final combined = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
-    for (final doc in primary) {
-      combined[doc.id] = doc;
-    }
-    for (final doc in deferred) {
-      combined[doc.id] = doc;
-    }
-    for (final doc in settled) {
-      combined[doc.id] = doc;
-    }
-
-    final merged = combined.values.toList()
-      ..sort(
-        (a, b) => _createdAtOf(b).compareTo(_createdAtOf(a)),
-      );
-    return merged;
-  }
-
   DateTime _createdAtOf(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
     final value = data['created_at'];
@@ -193,7 +155,10 @@ class SalesHistoryRepository {
       return value;
     }
     if (value is num) {
-      return DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true).toLocal();
+      return DateTime.fromMillisecondsSinceEpoch(
+        value.toInt(),
+        isUtc: true,
+      ).toLocal();
     }
     if (value is String) {
       return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);

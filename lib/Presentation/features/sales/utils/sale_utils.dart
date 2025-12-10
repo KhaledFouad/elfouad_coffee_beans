@@ -104,19 +104,79 @@ String detectSaleType(Map<String, dynamic> data) {
 }
 
 List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
+  // 1) لو في components جاهزة (مثلاً custom_blend القديمة)
   final components = _asListMap(data['components']);
   if (components.isNotEmpty) {
     return components.map(SaleComponent.fromMap).toList();
   }
+
+  // 2) لو في items (فاتورة POS)
   final items = _asListMap(data['items']);
   if (items.isNotEmpty) {
+    // فاتورة من الـ POS
+    if (type == 'invoice') {
+      final List<SaleComponent> result = [];
+
+      for (final item in items) {
+        // البند الأساسي زي ما هو
+        var base = SaleComponent.fromMap(item);
+
+        final itemType = (item['type'] ?? '').toString();
+
+        // لو البند ده "خلطة مخصصة" وفيه meta.components نخلي الاسم يحتوي على التفاصيل
+        if (itemType == 'custom_blend') {
+          final meta = item['meta'];
+          final metaComponents = meta is Map<String, dynamic>
+              ? _asListMap(meta['components'])
+              : const <Map<String, dynamic>>[];
+
+          if (metaComponents.isNotEmpty) {
+            final detailParts = <String>[];
+
+            for (final c in metaComponents) {
+              final name = (c['name'] ?? '').toString();
+              final variant = (c['variant'] ?? '').toString();
+              final grams = parseDouble(c['grams'] ?? c['weight']);
+
+              if (name.isEmpty) continue;
+
+              String label = name;
+              if (variant.isNotEmpty) {
+                label = '$name - $variant';
+              }
+              if (grams > 0) {
+                label = '$label ${grams.toStringAsFixed(0)} جم';
+              }
+
+              detailParts.add(label);
+            }
+
+            if (detailParts.isNotEmpty) {
+              final baseName = base.name.isNotEmpty ? base.name : 'خلطة مخصصة';
+              // مثال: "خلطة مخصصة (اندونيسي فاتح 100 جم + برازيلي غامق 50 جم)"
+              final newName = '$baseName (${detailParts.join(' + ')})';
+              base = base.copyWith(name: newName);
+            }
+          }
+        }
+
+        result.add(base);
+      }
+
+      return result;
+    }
+
+    // أي نوع تاني (مثلاً single قديمة) نرجعه زي ما هو
     return items.map(SaleComponent.fromMap).toList();
   }
+
+  // 3) بعض الأنواع القديمة تستخدم lines
   final lines = _asListMap(data['lines']);
   if (lines.isNotEmpty) {
     return lines.map(SaleComponent.fromMap).toList();
   }
 
+  // 4) الأنواع المنفردة
   if (type == 'drink') {
     final name = (data['drink_name'] ?? data['name'] ?? 'مشروب').toString();
     final variant = (data['roast'] ?? data['variant'] ?? '').toString();
@@ -133,8 +193,7 @@ List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
         grams: 0,
         quantity: quantity,
         unit: unit,
-        lineTotalPrice:
-            totalPrice > 0 ? totalPrice : unitPrice * quantity,
+        lineTotalPrice: totalPrice > 0 ? totalPrice : unitPrice * quantity,
         lineTotalCost: totalCost > 0 ? totalCost : unitCost * quantity,
       ),
     ];
@@ -175,10 +234,8 @@ List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
         grams: 0,
         quantity: quantity,
         unit: unit,
-        lineTotalPrice:
-            totalPrice > 0 ? totalPrice : unitPrice * quantity,
-        lineTotalCost:
-            totalCost > 0 ? totalCost : unitCost * quantity,
+        lineTotalPrice: totalPrice > 0 ? totalPrice : unitPrice * quantity,
+        lineTotalCost: totalCost > 0 ? totalCost : unitCost * quantity,
       ),
     ];
   }
@@ -206,6 +263,11 @@ String buildTitleLine(Map<String, dynamic> data, String type) {
           ? labelNV
           : (drinkName.isNotEmpty ? drinkName : 'مشروب');
       return 'مشروب - $quantity $finalName';
+    case 'invoice':
+      final items = _asListMap(data['items']);
+      final count = items.length;
+      final amount = parseDouble(data['total_price']).toStringAsFixed(2);
+      return 'فاتورة - $count بند - $amount';
     case 'single':
       final grams = parseDouble(data['grams']).toStringAsFixed(0);
       final lbl = labelNV.isNotEmpty ? labelNV : name;
@@ -217,10 +279,11 @@ String buildTitleLine(Map<String, dynamic> data, String type) {
     case 'custom_blend':
       return 'توليفة العميل';
     case 'extra':
-      final quantity =
-          parseDouble(data['quantity'] ?? data['qty'] ?? 1).toStringAsFixed(0);
-      final extraName =
-          (data['extra_name'] ?? data['name'] ?? 'سناكس').toString();
+      final quantity = parseDouble(
+        data['quantity'] ?? data['qty'] ?? 1,
+      ).toStringAsFixed(0);
+      final extraName = (data['extra_name'] ?? data['name'] ?? 'سناكس')
+          .toString();
       final unit = normalizeUnit((data['unit'] ?? 'piece').toString());
       return 'سناكس - $quantity $unit $extraName';
     default:
@@ -231,9 +294,11 @@ String buildTitleLine(Map<String, dynamic> data, String type) {
 List<Map<String, dynamic>> _asListMap(dynamic value) {
   if (value is List) {
     return value
-        .map((e) => e is Map<String, dynamic>
-            ? e
-            : (e is Map ? e.cast<String, dynamic>() : <String, dynamic>{}))
+        .map(
+          (e) => e is Map<String, dynamic>
+              ? e
+              : (e is Map ? e.cast<String, dynamic>() : <String, dynamic>{}),
+        )
         .toList();
   }
   return const [];

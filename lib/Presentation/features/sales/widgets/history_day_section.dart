@@ -4,12 +4,21 @@ import '../models/sales_day_group.dart';
 import 'sale_tile.dart';
 
 class HistoryDaySection extends StatelessWidget {
-  const HistoryDaySection({super.key, required this.group});
+  const HistoryDaySection({
+    super.key,
+    required this.group,
+    this.overrideTotal,
+    this.showTotalLoading = false,
+  });
 
   final SalesDayGroup group;
+  final double? overrideTotal;
+  final bool showTotalLoading;
 
   @override
   Widget build(BuildContext context) {
+    final summaryValue = overrideTotal ?? group.totalPaid;
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -27,7 +36,10 @@ class HistoryDaySection extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                _SummaryPill(value: group.totalPaid),
+                _SummaryPill(
+                  value: summaryValue,
+                  isLoading: showTotalLoading && overrideTotal == null,
+                ),
               ],
             ),
             const Divider(height: 18),
@@ -40,9 +52,10 @@ class HistoryDaySection extends StatelessWidget {
 }
 
 class _SummaryPill extends StatelessWidget {
-  const _SummaryPill({required this.value});
+  const _SummaryPill({required this.value, this.isLoading = false});
 
   final double value;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -50,18 +63,25 @@ class _SummaryPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.brown.shade50,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.brown.shade100),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.brown.shade200),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.attach_money, size: 16),
           const SizedBox(width: 4),
-          Text(
-            'مبيعات: ${value.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
+          if (isLoading)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Text(
+              'مبيعات: ${value.toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
         ],
       ),
     );

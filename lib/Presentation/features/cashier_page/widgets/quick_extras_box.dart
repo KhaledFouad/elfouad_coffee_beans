@@ -103,14 +103,11 @@ class _ItemTile extends StatelessWidget {
       final qty = int.tryParse(controller.text.trim()) ?? 1;
       await sellExtra(extraId: item.id, qty: qty);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sold $qty x ${item.name}')),
-      );
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sell item: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to sell item: $error')));
     } finally {
       controller.dispose();
     }

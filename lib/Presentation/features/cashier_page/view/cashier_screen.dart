@@ -1,96 +1,103 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/extras_page.dart'
-    show ExtrasPage;
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/custom_blends_page.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/blends_models.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/blend_dialog.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/drink_dialog.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/extra_dialog.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/single_dialog.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/sales/pages/sales_history_page.dart';
+import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-
-import 'singles_page.dart';
-import 'blends_page.dart';
-import 'custom_blends_page.dart';
-import 'drinks.dart';
+import 'package:provider/provider.dart';
 
 class CashierHome extends StatelessWidget {
   const CashierHome({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final categories = [
-      {
-        "title": "مشروبات",
-        "icon": FontAwesomeIcons.mugHot,
-        "image": "assets/drinks.jpg",
-        "builder": (BuildContext _) => const DrinksPage(),
-      },
-      {
-        "title": "أصناف منفردة",
-        "icon": FontAwesomeIcons.cookieBite,
-        "image": "assets/singles.jpg",
-        "builder": (BuildContext _) => const SinglesPage(),
-      },
-      {
-        "title": "توليفات جاهزة",
-        "icon": FontAwesomeIcons.cubes,
-        "image": "assets/blends.jpg",
-        "builder": (BuildContext _) => const BlendsPage(),
-      },
-      {
-        "title": "معمول و تمر",
-        "icon": FontAwesomeIcons.cookie,
-        "image": "assets/cookies.png",
-        "builder": (BuildContext _) => const ExtrasPage(),
-      },
-      {
-        "title": "توليفات العميل",
-        "icon": FontAwesomeIcons.userGear,
-        "image": "assets/custom.jpg",
-        "builder": (BuildContext _) => const CustomBlendsPage(),
-      },
-    ];
-
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        // ==== FAB مع بادچ لعدد عمليات الأجل غير المسددة ====
-        floatingActionButton: _SalesHistoryFabWithBadge(),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      child: ChangeNotifierProvider(
+        create: (_) => CartState(),
+        child: const _PosShell(),
+      ),
+    );
+  }
+}
 
-        backgroundColor: const Color(0xFFF5F5F5),
-        body: LayoutBuilder(
+enum _Category { drinks, singles, blends, extras, custom }
+
+class _PosShell extends StatefulWidget {
+  const _PosShell();
+
+  @override
+  State<_PosShell> createState() => _PosShellState();
+}
+
+class _PosShellState extends State<_PosShell> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _noteCtrl = TextEditingController();
+
+  _Category _selected = _Category.drinks;
+  bool _checkingOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _noteCtrl.addListener(() {
+      final cart = context.read<CartState>();
+      cart.setInvoiceNote(_noteCtrl.text);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.read<CartState>();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F3EF),
+      body: SafeArea(
+        child: LayoutBuilder(
           builder: (context, constraints) {
-            final maxW = constraints.maxWidth.clamp(0, 1100.0);
-            final cardW = (maxW / 2).clamp(220.0, 340.0);
-            final cardH = cardW * 0.85;
+            final isWide = constraints.maxWidth > 1200;
+            final cartPanelWidth = isWide ? 360.0 : 320.0;
 
-            return Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 24,
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1100),
-                  child: Wrap(
-                    spacing: 20,
-                    runSpacing: 20,
-                    alignment: WrapAlignment.center,
-                    children: categories.map((cat) {
-                      return _CategoryCard(
-                        title: cat["title"] as String,
-                        icon: cat["icon"] as IconData,
-                        image: cat["image"] as String,
-                        width: cardW,
-                        height: cardH,
-                        onTap: () => _push(
-                          context,
-                          cat["builder"] as Widget Function(BuildContext),
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildSidebar(),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                          child: _buildCatalog(cart),
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+                SizedBox(
+                  width: cartPanelWidth,
+                  child: _CartPanel(
+                    noteCtrl: _noteCtrl,
+                    checkingOut: _checkingOut,
+                    onCheckout: () => _checkout(cart),
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -98,51 +105,442 @@ class CashierHome extends StatelessWidget {
     );
   }
 
-  void _push(BuildContext context, Widget Function(BuildContext) builder) {
-    Navigator.of(context).push(MaterialPageRoute(builder: builder));
+  Widget _buildSidebar() {
+    const items = [
+      (_Category.drinks, 'المشروبات', Icons.local_cafe),
+      (_Category.singles, 'أصناف البن', Icons.coffee_outlined),
+      (_Category.blends, 'توليفات البن', Icons.blender_outlined),
+      (_Category.extras, 'معمول و تمر', Icons.cookie),
+      (_Category.custom, 'توليفة مخصصة', Icons.auto_awesome_motion),
+    ];
+
+    // تكبير الابعاد شوية على التابلت
+    final size = MediaQuery.of(context).size;
+    final isTabletWidth = size.width >= 800;
+
+    final sidebarWidth = isTabletWidth ? 240.0 : 200.0;
+    final buttonHeight = isTabletWidth ? 72.0 : 60.0;
+    final fontSize = isTabletWidth ? 18.0 : 16.0;
+    final iconSize = isTabletWidth ? 24.0 : 22.0;
+
+    return Container(
+      width: sidebarWidth,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 12,
+            color: Colors.black.withValues(alpha: 0.06),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'الأقسام',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 20),
+
+          // أزرار الأقسام
+          ...items.map((item) {
+            final selected = _selected == item.$1;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                height: buttonHeight,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    side: BorderSide(
+                      color: selected
+                          ? const Color(0xFF543824)
+                          : Colors.brown.shade100,
+                      width: selected ? 2 : 1,
+                    ),
+                    backgroundColor: selected
+                        ? const Color(0x15543824)
+                        : Colors.white,
+                    foregroundColor: const Color(0xFF543824),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () => setState(() => _selected = item.$1),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // النص في النص تقريبًا
+                      Expanded(
+                        child: Text(
+                          item.$2,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: fontSize,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(item.$3, size: iconSize),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+
+          const Spacer(),
+          const Divider(),
+
+          // زر "سجل المبيعات" بمساحة لمس أكبر شوية
+          ListTile(
+            dense: false,
+            minVerticalPadding: 14,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            leading: const Icon(Icons.receipt_long, size: 26),
+            title: const Text(
+              'سجل المبيعات',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SalesHistoryPage()),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      child: Row(
+        children: [
+          const Text(
+            'نقطة البيع',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'ابحث عن منتج...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 0,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (kIsWeb)
+            IconButton(
+              tooltip: 'تحديث',
+              onPressed: () => setState(() {}),
+              icon: const Icon(Icons.refresh),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCatalog(CartState cart) {
+    switch (_selected) {
+      case _Category.drinks:
+        return _DrinksGrid(
+          query: _searchCtrl.text,
+          onAdd: (line) => _addLine(cart, line),
+        );
+      case _Category.singles:
+        return _SinglesGrid(
+          query: _searchCtrl.text,
+          onAdd: (line) => _addLine(cart, line),
+        );
+      case _Category.blends:
+        return _BlendsGrid(
+          query: _searchCtrl.text,
+          onAdd: (line) => _addLine(cart, line),
+        );
+      case _Category.extras:
+        return _ExtrasGrid(
+          query: _searchCtrl.text,
+          onAdd: (line) => _addLine(cart, line),
+        );
+      case _Category.custom:
+        return _CustomBlendEntry(onAdd: (line) => _addLine(cart, line));
+    }
+  }
+
+  void _addLine(CartState cart, CartLine line) {
+    cart.addLine(line);
+    ScaffoldMessenger.of(context);
+  }
+
+  Future<void> _checkout(CartState cart) async {
+    if (cart.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('السلة فارغة، أضف منتجات أولاً')),
+      );
+      return;
+    }
+    setState(() => _checkingOut = true);
+    try {
+      await CartCheckout.commitInvoice(cart: cart);
+      cart.clear();
+      _noteCtrl.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context);
+    } catch (e, st) {
+      logError(e, st);
+      if (mounted) await showErrorDialog(context, e, st);
+    } finally {
+      if (mounted) setState(() => _checkingOut = false);
+    }
   }
 }
 
-/// ==== FAB يُظهِر بادچ بعدد العمليات المؤجلة غير المسددة ====
-class _SalesHistoryFabWithBadge extends StatelessWidget {
+class _CartPanel extends StatelessWidget {
+  const _CartPanel({
+    required this.noteCtrl,
+    required this.checkingOut,
+    required this.onCheckout,
+  });
+
+  final TextEditingController noteCtrl;
+  final bool checkingOut;
+  final VoidCallback onCheckout;
+
+  @override
   @override
   Widget build(BuildContext context) {
-    final q = FirebaseFirestore.instance
-        .collection('sales')
-        .where('is_deferred', isEqualTo: true)
-        .where('paid', isEqualTo: false);
+    final cart = context.watch<CartState>();
+    final lines = cart.lines;
+    final totalPrice = cart.totalPrice;
+    final isDeferred = cart.invoiceDeferred;
+    final isEmpty = lines.isEmpty;
 
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: q.snapshots(),
-      builder: (context, snap) {
-        final count = snap.hasData ? snap.data!.docs.length : 0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // If height is very small, allow scrolling of the whole panel.
+        final useOuterScroll = constraints.maxHeight < 520;
 
-        return Stack(
-          clipBehavior: Clip.none,
+        final content = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            FloatingActionButton.extended(
-              backgroundColor: const Color(0xFF543824),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SalesHistoryPage()),
-                );
-              },
-              icon: const Icon(Icons.receipt_long, color: Colors.white),
-              label: const Text(
-                'سجلّ المبيعات',
-                style: TextStyle(color: Colors.white),
+            const Text(
+              'سلة المشتريات',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+
+            // ===== List of lines =====
+            Expanded(
+              child: lines.isEmpty
+                  ? const Center(
+                      child: Text('السلة فارغة، أضف منتجات للمتابعة'),
+                    )
+                  : ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemCount: lines.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) {
+                        final line = lines[i];
+                        final qtyLabel = line.grams > 0
+                            ? '${line.grams.toStringAsFixed(0)} جم'
+                            : '${line.quantity.toStringAsFixed(2)} ${line.unit}';
+
+                        return Card(
+                          margin: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            visualDensity: const VisualDensity(
+                              vertical: -1,
+                              horizontal: -1,
+                            ),
+                            leading: CircleAvatar(
+                              backgroundColor: Colors.brown.shade50,
+                              child: Text(
+                                line.name.isNotEmpty ? line.name[0] : '#',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF543824),
+                                ),
+                              ),
+                            ),
+                            title: Text(
+                              line.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              line.variant?.isNotEmpty == true
+                                  ? '${line.variant!} - $qtyLabel'
+                                  : qtyLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  line.lineTotalPrice.toStringAsFixed(2),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF543824),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: const VisualDensity(
+                                    vertical: -4,
+                                    horizontal: -4,
+                                  ),
+                                  onPressed: () => context
+                                      .read<CartState>()
+                                      .removeLine(line.id),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ===== Deferred toggle + payment method (if any) =====
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Switch(
+                        value: isDeferred,
+                        onChanged: (v) =>
+                            context.read<CartState>().setInvoiceDeferred(v),
+                      ),
+                      const SizedBox(width: 4),
+                      const Flexible(
+                        child: Text(
+                          'فاتورة مؤجلة',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // if you later add payment method dropdown, put it here
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // ===== Note field =====
+            TextField(
+              controller: noteCtrl,
+              maxLines: 2,
+              decoration: InputDecoration(
+                hintText: 'ملاحظات/اسم العميل (اختياري)',
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
-            if (count > 0)
-              Positioned(
-                // تحريك بسيط لأعلى/يمين عشان يبان فوق الـ FAB
-                right: -4,
-                top: -4,
-                child: _Badge(count: count),
+
+            const SizedBox(height: 10),
+
+            _summaryRow('الإجمالي', totalPrice),
+
+            const SizedBox(height: 8),
+
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                style: ButtonStyle(
+                  backgroundColor: WidgetStateProperty.all(
+                    const Color(0xFF543824),
+                  ),
+                ),
+                onPressed: (checkingOut || isEmpty) ? null : onCheckout,
+                child: checkingOut
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text(
+                        'إتمام الفاتورة',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ),
+            ),
           ],
         );
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 12,
+                color: Colors.black.withValues(alpha: 0.06),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+          child: useOuterScroll
+              ? SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: content,
+                  ),
+                )
+              : content,
+        );
       },
+    );
+  }
+
+  Widget _summaryRow(String label, double value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+          const Spacer(),
+          Text(value.toStringAsFixed(2)),
+        ],
+      ),
     );
   }
 }
@@ -156,125 +554,520 @@ class _Badge extends StatelessWidget {
     final text = count > 99 ? '99+' : '$count';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      constraints: const BoxConstraints(minWidth: 22, minHeight: 18),
       decoration: BoxDecoration(
         color: Colors.redAccent,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white, width: 1.5),
-        boxShadow: const [BoxShadow(blurRadius: 4, color: Colors.black26)],
       ),
-      child: Center(
-        child: Text(
-          text,
-          textScaler: const TextScaler.linear(1.0),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            height: 1.0,
-          ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
   }
 }
 
-class _CategoryCard extends StatefulWidget {
-  final String title;
-  final IconData icon;
-  final String image;
-  final double width;
-  final double height;
-  final VoidCallback onTap;
-
-  const _CategoryCard({
+class _CatalogItem {
+  _CatalogItem({
     required this.title,
-    required this.icon,
     required this.image,
-    required this.width,
-    required this.height,
     required this.onTap,
+    this.subtitle,
+    this.priceText,
   });
 
-  @override
-  State<_CategoryCard> createState() => _CategoryCardState();
+  final String title;
+  final String image;
+  final String? subtitle;
+  final String? priceText;
+  final VoidCallback onTap;
 }
 
-class _CategoryCardState extends State<_CategoryCard>
-    with SingleTickerProviderStateMixin {
-  double _scale = 1.0;
+class _CatalogGrid extends StatelessWidget {
+  const _CatalogGrid({required this.items});
 
-  void _setHover(bool hover) {
-    if (!kIsWeb) return;
-    setState(() => _scale = hover ? 1.04 : 1.0);
-  }
+  final List<_CatalogItem> items;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => _setHover(true),
-      onExit: (_) => _setHover(false),
-      child: AnimatedScale(
-        scale: _scale,
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOut,
-        child: Material(
-          elevation: 6,
-          borderRadius: BorderRadius.circular(22),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: widget.onTap,
-            splashColor: Colors.white.withValues(alpha: 0.25),
-            highlightColor: Colors.transparent,
-            child: SizedBox(
-              width: widget.width,
-              height: widget.height,
-              child: Stack(
-                fit: StackFit.expand,
+    if (items.isEmpty) {
+      return const Center(child: Text('لا توجد عناصر مطابقة'));
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final max = constraints.maxWidth;
+        final cross = max >= 1200
+            ? 4
+            : max >= 900
+            ? 3
+            : max >= 600
+            ? 2
+            : 1;
+
+        return GridView.builder(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cross,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 1.1,
+          ),
+          itemCount: items.length,
+          itemBuilder: (_, i) => _CatalogCard(item: items[i]),
+        );
+      },
+    );
+  }
+}
+
+class _CatalogCard extends StatelessWidget {
+  const _CatalogCard({required this.item});
+
+  final _CatalogItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: item.onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Image.asset(
+                item.image,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    Container(color: Colors.brown.shade50),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Image.asset(
-                    widget.image,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        Container(color: Colors.grey.shade300),
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.15),
-                          Colors.black.withValues(alpha: 0.55),
-                        ],
+                  if (item.subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      item.subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                  ],
+                  if (item.priceText != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      item.priceText!,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF543824),
                       ),
                     ),
-                  ),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(widget.icon, color: Colors.white, size: 42),
-                        const SizedBox(height: 10),
-                        Text(
-                          widget.title,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 34,
-                            fontWeight: FontWeight.w800,
-                            height: 1.1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
+  }
+}
+
+class _DrinksGrid extends StatelessWidget {
+  const _DrinksGrid({required this.query, required this.onAdd});
+
+  final String query;
+  final ValueChanged<CartLine> onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('drinks').snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return const Center(child: Text('حدث خطأ أثناء تحميل المشروبات'));
+        }
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return const Center(child: Text('لا توجد مشروبات متاحة'));
+        }
+
+        final q = query.trim().toLowerCase();
+        final items =
+            snap.data!.docs
+                .map((doc) {
+                  final data = doc.data();
+                  final name = (data['name'] ?? '').toString();
+                  final image = (data['image'] ?? 'assets/drinks.jpg')
+                      .toString();
+                  final sellPrice = (data['sellPrice'] is num)
+                      ? (data['sellPrice'] as num).toDouble()
+                      : double.tryParse('${data['sellPrice'] ?? 0}') ?? 0.0;
+                  return (
+                    id: doc.id,
+                    name: name,
+                    image: image,
+                    price: sellPrice,
+                    data: data,
+                  );
+                })
+                .where((d) {
+                  if (q.isEmpty) return true;
+                  return d.name.toLowerCase().contains(q);
+                })
+                .toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+
+        final cards = items
+            .map(
+              (it) => _CatalogItem(
+                title: it.name,
+                image: it.image,
+                priceText: '${it.price.toStringAsFixed(2)} ج.م',
+                onTap: () async {
+                  try {
+                    await showDialog(
+                      context: context,
+                      builder: (_) => DrinkDialog(
+                        drinkId: it.id,
+                        drinkData: it.data,
+                        onAddToCart: onAdd,
+                      ),
+                    );
+                  } catch (e, st) {
+                    logError(e, st);
+                    if (context.mounted) await showErrorDialog(context, e, st);
+                  }
+                },
+              ),
+            )
+            .toList();
+
+        return _CatalogGrid(items: cards);
+      },
+    );
+  }
+}
+
+class _SinglesGrid extends StatelessWidget {
+  const _SinglesGrid({required this.query, required this.onAdd});
+
+  final String query;
+  final ValueChanged<CartLine> onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('singles').snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return const Center(
+            child: Text('حدث خطأ أثناء تحميل المحاصيل المفردة'),
+          );
+        }
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return const Center(child: Text('لا توجد محاصيل مفردة متاحة'));
+        }
+
+        final Map<String, SingleGroup> groups = {};
+        for (final doc in snap.data!.docs) {
+          final data = doc.data();
+          final name = (data['name'] ?? '').toString();
+          final image = (data['image'] ?? 'assets/singles.jpg').toString();
+          final variant = (data['variant'] ?? '').toString().trim();
+
+          final sellPerKg = (data['sellPricePerKg'] is num)
+              ? (data['sellPricePerKg'] as num).toDouble()
+              : double.tryParse((data['sellPricePerKg'] ?? '0').toString()) ??
+                    0.0;
+          final costPerKg = (data['costPricePerKg'] is num)
+              ? (data['costPricePerKg'] as num).toDouble()
+              : double.tryParse((data['costPricePerKg'] ?? '0').toString()) ??
+                    0.0;
+          final unit = (data['unit'] ?? 'g').toString();
+
+          groups.putIfAbsent(name, () => SingleGroup(name: name, image: image));
+          groups[name]!.variants[variant] = SingleVariant(
+            id: doc.id,
+            name: name,
+            variant: variant,
+            image: image,
+            sellPricePerKg: sellPerKg,
+            costPricePerKg: costPerKg,
+            unit: unit,
+          );
+        }
+
+        final q = query.trim().toLowerCase();
+        final items =
+            groups.values
+                .where((g) => q.isEmpty || g.name.toLowerCase().contains(q))
+                .toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+
+        final cards = items
+            .map(
+              (it) => _CatalogItem(
+                title: it.name,
+                image: it.image,
+                subtitle: 'الأنواع: ${it.variants.length}',
+                onTap: () async {
+                  try {
+                    await showDialog(
+                      context: context,
+                      builder: (_) => SingleDialog(
+                        group: it,
+                        cartMode: true,
+                        onAddToCart: onAdd,
+                      ),
+                    );
+                  } catch (e, st) {
+                    logError(e, st);
+                    if (context.mounted) await showErrorDialog(context, e, st);
+                  }
+                },
+              ),
+            )
+            .toList();
+
+        return _CatalogGrid(items: cards);
+      },
+    );
+  }
+}
+
+class _BlendsGrid extends StatelessWidget {
+  const _BlendsGrid({required this.query, required this.onAdd});
+
+  final String query;
+  final ValueChanged<CartLine> onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('blends').snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return const Center(child: Text('حدث خطأ أثناء تحميل خلطات البن'));
+        }
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return const Center(child: Text('لا توجد خلطات متاحة'));
+        }
+
+        final Map<String, BlendGroup> groups = {};
+        for (final doc in snap.data!.docs) {
+          final data = doc.data();
+          final name = (data['name'] ?? '').toString();
+          final image = (data['image'] ?? 'assets/blends.jpg').toString();
+          final variant = (data['variant'] ?? '').toString().trim();
+
+          final sellPerKg = (data['sellPricePerKg'] is num)
+              ? (data['sellPricePerKg'] as num).toDouble()
+              : double.tryParse((data['sellPricePerKg'] ?? '0').toString()) ??
+                    0.0;
+          final costPerKg = (data['costPricePerKg'] is num)
+              ? (data['costPricePerKg'] as num).toDouble()
+              : double.tryParse((data['costPricePerKg'] ?? '0').toString()) ??
+                    0.0;
+
+          final unit = (data['unit'] ?? 'g').toString();
+          final stock = (data['stock'] is num)
+              ? (data['stock'] as num).toDouble()
+              : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
+
+          groups.putIfAbsent(name, () => BlendGroup(name: name, image: image));
+
+          groups[name]!.variants[variant] = BlendVariant(
+            id: doc.id,
+            name: name,
+            variant: variant,
+            image: image,
+            sellPricePerKg: sellPerKg,
+            costPricePerKg: costPerKg,
+            unit: unit,
+            stock: stock,
+          );
+        }
+
+        final q = query.trim().toLowerCase();
+        final items =
+            groups.values
+                .where((g) => q.isEmpty || g.name.toLowerCase().contains(q))
+                .toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+
+        final cards = items
+            .map(
+              (it) => _CatalogItem(
+                title: it.name,
+                image: it.image,
+                subtitle: 'الأنواع: ${it.variants.length}',
+                onTap: () async {
+                  try {
+                    await showDialog(
+                      context: context,
+                      builder: (_) => BlendDialog(
+                        group: it,
+                        cartMode: true,
+                        onAddToCart: onAdd,
+                      ),
+                    );
+                  } catch (e, st) {
+                    logError(e, st);
+                    if (context.mounted) await showErrorDialog(context, e, st);
+                  }
+                },
+              ),
+            )
+            .toList();
+
+        return _CatalogGrid(items: cards);
+      },
+    );
+  }
+}
+
+class _ExtrasGrid extends StatelessWidget {
+  const _ExtrasGrid({required this.query, required this.onAdd});
+
+  final String query;
+  final ValueChanged<CartLine> onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('extras')
+          .where('category', isEqualTo: 'biscuits')
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return const Center(child: Text('حدث خطأ أثناء تحميل الإضافات'));
+        }
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return const Center(child: Text('لا توجد إضافات متاحة'));
+        }
+
+        final q = query.trim().toLowerCase();
+        final items =
+            snap.data!.docs
+                .map((doc) {
+                  final data = doc.data();
+                  final name = (data['name'] ?? '').toString();
+                  final image = (data['image'] ?? 'assets/cookies.png')
+                      .toString();
+                  double numValue(v) => (v is num)
+                      ? v.toDouble()
+                      : double.tryParse('${v ?? ''}') ?? 0.0;
+                  int intValue(v) =>
+                      (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+
+                  final priceSell = numValue(data['price_sell']);
+                  final stock = intValue(data['stock_units']);
+
+                  return (
+                    id: doc.id,
+                    name: name,
+                    image: image,
+                    price: priceSell,
+                    stock: stock,
+                    raw: data,
+                  );
+                })
+                .where((it) {
+                  if (q.isEmpty) return true;
+                  return it.name.toLowerCase().contains(q);
+                })
+                .toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+
+        final cards = items
+            .map(
+              (it) => _CatalogItem(
+                title: it.name,
+                image: it.image,
+                subtitle: 'المخزون: ${it.stock}',
+                priceText: '${it.price.toStringAsFixed(2)} ج.م',
+                onTap: () async {
+                  try {
+                    await showDialog(
+                      context: context,
+                      builder: (_) => ExtraDialog(
+                        extraId: it.id,
+                        extraData: it.raw,
+                        cartMode: true,
+                        onAddToCart: onAdd,
+                      ),
+                    );
+                  } catch (e, st) {
+                    logError(e, st);
+                    if (context.mounted) await showErrorDialog(context, e, st);
+                  }
+                },
+              ),
+            )
+            .toList();
+
+        return _CatalogGrid(items: cards);
+      },
+    );
+  }
+}
+
+class _CustomBlendEntry extends StatelessWidget {
+  const _CustomBlendEntry({required this.onAdd});
+
+  final ValueChanged<CartLine> onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = _CatalogItem(
+      title: 'تحضير خلطة مخصصة',
+      image: 'assets/custom.jpg',
+      subtitle: 'اخلط البن كما تحب من المكونات المتاحة',
+      onTap: () async {
+        try {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  CustomBlendsPage(cartMode: true, onAddToCart: onAdd),
+            ),
+          );
+        } catch (e, st) {
+          logError(e, st);
+          if (context.mounted) await showErrorDialog(context, e, st);
+        }
+      },
+    );
+
+    return _CatalogGrid(items: [item]);
   }
 }

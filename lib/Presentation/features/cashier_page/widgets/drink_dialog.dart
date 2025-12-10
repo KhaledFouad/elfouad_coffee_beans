@@ -1,8 +1,7 @@
 // lib/Presentation/features/cashier_page/widgets/DrinkDialog.dart
 // ignore_for_file: unused_local_variable, unused_element
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/deferred_note_field.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:flutter/material.dart';
 import 'toggle_card.dart'; // الكارد المعاد استخدامه
@@ -13,10 +12,14 @@ class DrinkDialog extends StatefulWidget {
   final String drinkId;
   final Map<String, dynamic> drinkData;
 
+  /// كول باك لإضافة المشروب إلى السلة
+  final ValueChanged<CartLine>? onAddToCart;
+
   const DrinkDialog({
     super.key,
     required this.drinkId,
     required this.drinkData,
+    this.onAddToCart,
   });
 
   @override
@@ -24,21 +27,19 @@ class DrinkDialog extends StatefulWidget {
 }
 
 class _DrinkDialogState extends State<DrinkDialog> {
-  bool _isDeferred = false; // أجّل
   bool _busy = false;
   String? _fatal;
   int _qty = 1;
-  final TextEditingController _noteCtrl = TextEditingController();
 
   // Serving (سنجل/دوبل) للتركي/اسبريسو فقط
   Serving _serving = Serving.single;
 
-  // Complimentary (ضيافة)
-  bool _isComplimentary = false;
-
   // Coffee Mix (مياه/لبن)
   bool get _isCoffeeMix => _name.trim() == 'كوفي ميكس';
   String _mix = 'water'; // water | milk
+
+  // ==== Spice option (Turkish only) ====
+  bool _spiced = false;
 
   // --------- Utilities ---------
   String _norm(String s) => s.replaceAll('ى', 'ي').trim();
@@ -57,34 +58,9 @@ class _DrinkDialogState extends State<DrinkDialog> {
 
   double get _sellPriceBase => _numOf(widget.drinkData['sellPrice']);
 
-  // ==== Spice option (Turkish only) ====
-  bool _spiced = false;
-
   bool get _isTurkish {
     final n = _norm(_name);
     return n == _norm('قهوة تركي');
-  }
-
-  // ==== دوال تساعد على تنافي "ضيافة" و"أجِّل" ====
-  void _setComplimentary(bool v) {
-    setState(() {
-      _isComplimentary = v;
-      if (v) {
-        _isDeferred = false; // تنافي
-        _noteCtrl.clear();
-      }
-    });
-  }
-
-  void _setDeferred(bool v) {
-    setState(() {
-      _isDeferred = v;
-      if (v) {
-        _isComplimentary = false; // تنافي
-      } else {
-        _noteCtrl.clear();
-      }
-    });
   }
 
   double get _spicedCupCost =>
@@ -126,7 +102,6 @@ class _DrinkDialogState extends State<DrinkDialog> {
 
   // سعر الوحدة النهائي
   double get _unitPriceEffective {
-    if (_isComplimentary) return 0.0;
     if (_isCoffeeMix) return _coffeeMixUnitPrice;
 
     if (_supportsServingChoice && _serving == Serving.dbl) {
@@ -165,6 +140,110 @@ class _DrinkDialogState extends State<DrinkDialog> {
   double get _totalPrice => _unitPriceEffective * _qty;
   double get _totalCost => _unitCostFinal * _qty;
 
+  /// يبني CartLine للمشروب
+  CartLine _buildCartLine() {
+    if (_name.isEmpty) {
+      throw Exception('اسم المنتج غير موجود.');
+    }
+
+    final qtyDouble = _qty.toDouble();
+    final price = _totalPrice;
+    final cost = _totalCost;
+
+    // استهلاك البن من توليفة (لو موجود)
+    final usedAmountRaw = widget.drinkData['usedAmount'];
+    final usedAmount = _isNum(usedAmountRaw) ? _numOf(usedAmountRaw) : null;
+
+    final isDouble = _supportsServingChoice && _serving == Serving.dbl;
+    final perUnitConsumption = (usedAmount == null || usedAmount <= 0)
+        ? 0.0
+        : (isDouble
+              ? (_doubleUsedAmount > 0 ? _doubleUsedAmount : usedAmount * 2.0)
+              : usedAmount);
+
+    final totalConsumption = perUnitConsumption * _qty;
+
+    final sourceBlendId = (widget.drinkData['sourceBlendId'] ?? '')
+        .toString()
+        .trim();
+
+    final sourceBlendNameRaw = (widget.drinkData['sourceBlendName'] ?? '')
+        .toString()
+        .trim();
+
+    const Map<String, String> sourceBlendOverrides = {
+      'قهوة اسبريسو': 'توليفة اسبريسو',
+      'شاي': 'شاي كيني',
+      'شاى': 'شاي كيني',
+    };
+
+    String resolvedSourceBlendName = sourceBlendNameRaw.isNotEmpty
+        ? sourceBlendNameRaw
+        : (sourceBlendOverrides[_norm(_name)] ?? _name);
+
+    final impacts = <StockImpact>[];
+    if (totalConsumption > 0 && sourceBlendId.isNotEmpty) {
+      impacts.add(
+        StockImpact(
+          collection: 'blends',
+          docId: sourceBlendId,
+          field: 'stock',
+          amount: totalConsumption,
+          label: resolvedSourceBlendName,
+        ),
+      );
+    }
+
+    final meta = <String, dynamic>{
+      'serving': _supportsServingChoice
+          ? (_serving == Serving.dbl ? 'double' : 'single')
+          : 'single',
+      'spiced': _isTurkish ? _spiced : false,
+      'isTurkish': _isTurkish,
+      'isCoffeeMix': _isCoffeeMix,
+      if (_isCoffeeMix) 'mix': _mix,
+      'unit_price_effective': _unitPriceEffective,
+      'list_cost': _costPriceSingle,
+      'unit_cost_effective': _unitCostFinal,
+      'cost_basis': (_isTurkish && _spiced)
+          ? (_supportsServingChoice && _serving == Serving.dbl
+                ? 'spicedDoubleCupCost'
+                : 'spicedCupCost')
+          : (_supportsServingChoice && _serving == Serving.dbl
+                ? 'doubleCost'
+                : 'costPrice'),
+      if (totalConsumption > 0)
+        'consumption': {
+          'sourceBlendId': sourceBlendId.isEmpty ? null : sourceBlendId,
+          'sourceBlendName': resolvedSourceBlendName,
+          'usedAmountPerUnit': perUnitConsumption,
+          'serving': _serving == Serving.dbl ? 'double' : 'single',
+          'totalConsumed': totalConsumption,
+        },
+    };
+
+    return CartLine(
+      id: CartLine.newId(),
+      productId: widget.drinkId,
+      name: _name,
+      variant: null,
+      type: 'drink',
+      unit: _unit,
+      image: _image,
+      quantity: qtyDouble,
+      grams: 0.0,
+      unitPrice: qtyDouble > 0 ? (price / qtyDouble) : 0.0,
+      unitCost: qtyDouble > 0 ? (cost / qtyDouble) : 0.0,
+      lineTotalPrice: price,
+      lineTotalCost: cost,
+      isComplimentary: false,
+      isDeferred: false,
+      note: '',
+      meta: meta,
+      impacts: impacts,
+    );
+  }
+
   Future<void> _commitSale() async {
     if (_name.isEmpty) {
       setState(() => _fatal = 'اسم المنتج غير موجود.');
@@ -174,149 +253,15 @@ class _DrinkDialogState extends State<DrinkDialog> {
 
     setState(() => _busy = true);
     try {
-      final db = FirebaseFirestore.instance;
-
-      final usedAmountRaw = widget.drinkData['usedAmount'];
-      final usedAmount = _isNum(usedAmountRaw) ? _numOf(usedAmountRaw) : null;
-
-      final isDouble = _supportsServingChoice && _serving == Serving.dbl;
-      final perUnitConsumption = (usedAmount == null || usedAmount <= 0)
-          ? 0.0
-          : (isDouble
-              ? (_doubleUsedAmount > 0 ? _doubleUsedAmount : usedAmount * 2.0)
-              : usedAmount);
-
-      final totalConsumption = perUnitConsumption * _qty;
-
-      final sourceBlendId =
-          (widget.drinkData['sourceBlendId'] ?? '').toString().trim();
-
-      final sourceBlendNameRaw =
-          (widget.drinkData['sourceBlendName'] ?? '').toString().trim();
-
-      const Map<String, String> sourceBlendOverrides = {
-        'قهوة اسبريسو': 'توليفة اسبريسو',
-        'شاي': 'شاي كيني',
-        'شاى': 'شاي كيني',
-      };
-
-      String resolvedSourceBlendName = sourceBlendNameRaw.isNotEmpty
-          ? sourceBlendNameRaw
-          : (sourceBlendOverrides[_norm(_name)] ?? _name);
-
-      DocumentReference<Map<String, dynamic>>? blendRef;
-      if (totalConsumption > 0) {
-        if (sourceBlendId.isNotEmpty) {
-          blendRef = db.collection('blends').doc(sourceBlendId);
-        } else {
-          final byName = await db
-              .collection('blends')
-              .where('name', isEqualTo: resolvedSourceBlendName)
-              .limit(1)
-              .get();
-          if (byName.docs.isNotEmpty) {
-            blendRef = byName.docs.first.reference;
-          } else {
-            throw Exception(
-              'مصدر الاستهلاك غير موجود: "$resolvedSourceBlendName"',
-            );
-          }
-        }
-      }
-
-      final saleRef = db.collection('sales').doc();
-
-      await db.runTransaction((tx) async {
-        if (blendRef != null) {
-          final snap = await tx.get(blendRef);
-          if (!snap.exists) {
-            throw Exception('مصدر الاستهلاك غير موجود في المخزون.');
-          }
-          final data = snap.data()!;
-          final currentStock = _numOf(data['stock']);
-          if (currentStock < totalConsumption) {
-            throw Exception(
-              'المخزون غير كافي في "${data['name'] ?? resolvedSourceBlendName}"',
-            );
-          }
-          tx.update(blendRef, {'stock': currentStock - totalConsumption});
-        }
-
-        // قبل: كان بيصفّر total_price لو أجل
-        final isComp = _isComplimentary;
-        final isDeferred = _isDeferred && !isComp; // الضيافة لا تؤجل
-        final unitCost = _unitCostFinal;
-        final totalCost = unitCost * _qty;
-
-        // احسب السعر الحقيقي
-        final wouldTotalPrice = _isComplimentary ? 0.0 : _totalPrice;
-        final profitExpected = wouldTotalPrice - totalCost;
-        final unitPriceOut = isComp ? 0.0 : _unitPriceEffective;
-        final totalPriceOut = (isComp || isDeferred) ? 0.0 : _totalPrice;
-        final profitOut = (isComp || isDeferred)
-            ? 0.0
-            : (totalCost > 0 ? (_totalPrice - totalCost) : 0.0);
-        final note = isDeferred ? _noteCtrl.text.trim() : '';
-
-        tx.set(saleRef, {
-          'type': 'drink',
-          'drinkId': widget.drinkId,
-          'name': _name,
-          'drinkName': _name,
-          'image': _image,
-          'unit': _unit,
-          'serving': _supportsServingChoice
-              ? (_serving == Serving.dbl ? 'double' : 'single')
-              : 'single',
-          'quantity': _qty,
-
-          'unit_price': unitPriceOut,
-          'total_price': wouldTotalPrice, // ⬅️ مش بنصفّر في الأجل
-          'total_cost': totalCost,
-          'profit_total': (isComp || isDeferred) ? 0.0 : profitExpected,
-          'is_deferred': isDeferred,
-          'paid': isDeferred ? false : true, // ⬅️ الأجل يطلع غير مدفوع
-          'due_amount': isDeferred ? wouldTotalPrice : 0.0,
-          'note': note,
-          'list_cost': _costPriceSingle,
-          'unit_cost': unitCost,
-
-          'is_complimentary': isComp,
-          'spiced': _isTurkish ? _spiced : false,
-          'cost_basis': (_isTurkish && _spiced)
-              ? (_supportsServingChoice && _serving == Serving.dbl
-                  ? 'spicedDoubleCupCost'
-                  : 'spicedCupCost')
-              : (_supportsServingChoice && _serving == Serving.dbl
-                  ? 'doubleCost'
-                  : 'costPrice'),
-
-          'consumption': (totalConsumption > 0)
-              ? {
-                  'sourceBlendId': blendRef?.id,
-                  'sourceBlendName': resolvedSourceBlendName,
-                  'usedAmountPerUnit': isDouble
-                      ? (_doubleUsedAmount > 0
-                          ? _doubleUsedAmount
-                          : (usedAmount ?? 0.0) * 2.0)
-                      : (usedAmount ?? 0.0),
-                  'serving': _serving == Serving.dbl ? 'double' : 'single',
-                  'totalConsumed': totalConsumption,
-                }
-              : null,
-
-          'voided': false,
-          'created_at': FieldValue.serverTimestamp(),
-        });
-      });
-
+      final line = _buildCartLine();
+      widget.onAddToCart?.call(line);
       if (!mounted) return;
-      final nav = Navigator.of(context, rootNavigator: true);
-      nav.pop();
-      nav.pushNamedAndRemoveUntil('/', (r) => false);
-    } catch (e, st) {
-      logError(e, st);
-      if (mounted) await showErrorDialog(context, e, st);
+      Navigator.pop(context, line);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _fatal = 'حدث خطأ غير متوقع.');
+        await showErrorDialog(context, e);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -325,9 +270,12 @@ class _DrinkDialogState extends State<DrinkDialog> {
   @override
   Widget build(BuildContext context) {
     final view = WidgetsBinding.instance.platformDispatcher.views.first;
-    final viewInsets =
-        EdgeInsets.fromViewPadding(view.viewInsets, view.devicePixelRatio);
+    final viewInsets = EdgeInsets.fromViewPadding(
+      view.viewInsets,
+      view.devicePixelRatio,
+    );
     final bottomInset = viewInsets.bottom;
+
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(viewInsets: viewInsets),
       child: AnimatedPadding(
@@ -452,10 +400,10 @@ class _DrinkDialogState extends State<DrinkDialog> {
                             const SizedBox(height: 12),
                           ],
 
-                          // === Toggles row ===
+                          // === Toggles row (محوّج فقط للتركي) ===
                           Row(
                             children: [
-                              if (_isTurkish) ...[
+                              if (_isTurkish)
                                 Expanded(
                                   child: ToggleCard(
                                     title: 'محوّج',
@@ -465,33 +413,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
                                         : (v) => setState(() => _spiced = v),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                              ],
-                              Expanded(
-                                child: ToggleCard(
-                                  title: 'ضيافة',
-                                  value: _isComplimentary,
-                                  onChanged: _busy
-                                      ? (_) {}
-                                      : (v) => _setComplimentary(v),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ToggleCard(
-                                  title: 'أجِّل',
-                                  value: _isDeferred,
-                                  onChanged:
-                                      _busy ? (_) {} : (v) => _setDeferred(v),
-                                ),
-                              ),
                             ],
-                          ),
-
-                          DeferredNoteField(
-                            controller: _noteCtrl,
-                            visible: _isDeferred,
-                            enabled: !_busy,
                           ),
 
                           const SizedBox(height: 12),
@@ -526,7 +448,9 @@ class _DrinkDialogState extends State<DrinkDialog> {
                                 onPressed: _busy
                                     ? null
                                     : () {
-                                        if (_qty > 1) setState(() => _qty -= 1);
+                                        if (_qty > 1) {
+                                          setState(() => _qty -= 1);
+                                        }
                                       },
                                 icon: const Icon(Icons.remove),
                               ),
@@ -592,8 +516,9 @@ class _DrinkDialogState extends State<DrinkDialog> {
                               decoration: BoxDecoration(
                                 color: Colors.orange.shade50,
                                 borderRadius: BorderRadius.circular(8),
-                                border:
-                                    Border.all(color: Colors.orange.shade200),
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
+                                ),
                               ),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -626,8 +551,9 @@ class _DrinkDialogState extends State<DrinkDialog> {
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed:
-                                  _busy ? null : () => Navigator.pop(context),
+                              onPressed: _busy
+                                  ? null
+                                  : () => Navigator.pop(context),
                               child: const Text(
                                 'إلغاء',
                                 style: TextStyle(
@@ -675,11 +601,5 @@ class _DrinkDialogState extends State<DrinkDialog> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _noteCtrl.dispose();
-    super.dispose();
   }
 }

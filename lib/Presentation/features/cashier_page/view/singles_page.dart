@@ -73,9 +73,7 @@ class SinglesPage extends StatelessWidget {
             final data = doc.data();
             final name = (data['name'] ?? '').toString();
             final image = (data['image'] ?? 'assets/singles.jpg').toString();
-            final variant = (data['variant'] ?? '')
-                .toString()
-                .trim(); // فاتح/وسط/غامق أو ""
+            final variant = (data['variant'] ?? '').toString().trim();
 
             final sellPerKg = (data['sellPricePerKg'] is num)
                 ? (data['sellPricePerKg'] as num).toDouble()
@@ -199,7 +197,9 @@ class _SingleCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Text(
                   title,
