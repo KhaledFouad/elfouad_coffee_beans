@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/view/custom_blends_page.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/blends_models.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
@@ -9,6 +9,7 @@ import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/single_dialog.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/sales/pages/sales_history_page.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -107,11 +108,11 @@ class _PosShellState extends State<_PosShell> {
 
   Widget _buildSidebar() {
     const items = [
-      (_Category.drinks, 'المشروبات', Icons.local_cafe),
-      (_Category.singles, 'أصناف البن', Icons.coffee_outlined),
-      (_Category.blends, 'توليفات البن', Icons.blender_outlined),
-      (_Category.extras, 'معمول و تمر', Icons.cookie),
-      (_Category.custom, 'توليفة مخصصة', Icons.auto_awesome_motion),
+      (_Category.drinks, AppStrings.titleDrinksSection, Icons.local_cafe),
+      (_Category.singles, AppStrings.titleSinglesSection, Icons.coffee_outlined),
+      (_Category.blends, AppStrings.titleBlendsSection, Icons.blender_outlined),
+      (_Category.extras, AppStrings.titleCookiesSection, Icons.cookie),
+      (_Category.custom, AppStrings.titleCustomBlendSection, Icons.auto_awesome_motion),
     ];
 
     // تكبير الابعاد شوية على التابلت
@@ -139,7 +140,7 @@ class _PosShellState extends State<_PosShell> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'الأقسام',
+            AppStrings.titleSections,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
           ),
@@ -203,7 +204,7 @@ class _PosShellState extends State<_PosShell> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             leading: const Icon(Icons.receipt_long, size: 26),
             title: const Text(
-              'سجل المبيعات',
+              AppStrings.titleSalesHistorySimple,
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             onTap: () {
@@ -223,7 +224,7 @@ class _PosShellState extends State<_PosShell> {
       child: Row(
         children: [
           const Text(
-            'نقطة البيع',
+            AppStrings.titlePos,
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
           ),
           const SizedBox(width: 16),
@@ -232,7 +233,7 @@ class _PosShellState extends State<_PosShell> {
               controller: _searchCtrl,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'ابحث عن منتج...',
+                hintText: AppStrings.hintSearchProduct,
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: Colors.white,
@@ -250,7 +251,7 @@ class _PosShellState extends State<_PosShell> {
           const SizedBox(width: 12),
           if (kIsWeb)
             IconButton(
-              tooltip: 'تحديث',
+              tooltip: AppStrings.tooltipRefresh,
               onPressed: () => setState(() {}),
               icon: const Icon(Icons.refresh),
             ),
@@ -294,7 +295,7 @@ class _PosShellState extends State<_PosShell> {
   Future<void> _checkout(CartState cart) async {
     if (cart.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('السلة فارغة، أضف منتجات أولاً')),
+        const SnackBar(content: Text(AppStrings.cartEmptyAddProductsFirst)),
       );
       return;
     }
@@ -343,7 +344,7 @@ class _CartPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'سلة المشتريات',
+              AppStrings.titleCart,
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
@@ -352,7 +353,7 @@ class _CartPanel extends StatelessWidget {
             Expanded(
               child: lines.isEmpty
                   ? const Center(
-                      child: Text('السلة فارغة، أضف منتجات للمتابعة'),
+                      child: Text(AppStrings.cartEmptyAddProductsToContinue),
                     )
                   : ListView.separated(
                       padding: EdgeInsets.zero,
@@ -361,7 +362,7 @@ class _CartPanel extends StatelessWidget {
                       itemBuilder: (_, i) {
                         final line = lines[i];
                         final qtyLabel = line.grams > 0
-                            ? '${line.grams.toStringAsFixed(0)} جم'
+                            ? '${line.grams.toStringAsFixed(0)} ${AppStrings.labelGramsShort}'
                             : '${line.quantity.toStringAsFixed(2)} ${line.unit}';
 
                         return Card(
@@ -446,7 +447,7 @@ class _CartPanel extends StatelessWidget {
                       const SizedBox(width: 4),
                       const Flexible(
                         child: Text(
-                          'فاتورة مؤجلة',
+                          AppStrings.labelDeferredInvoice,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -464,7 +465,7 @@ class _CartPanel extends StatelessWidget {
               controller: noteCtrl,
               maxLines: 2,
               decoration: InputDecoration(
-                hintText: 'ملاحظات/اسم العميل (اختياري)',
+                hintText: AppStrings.hintCustomerNoteOptional,
                 isDense: true,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -474,7 +475,7 @@ class _CartPanel extends StatelessWidget {
 
             const SizedBox(height: 10),
 
-            _summaryRow('الإجمالي', totalPrice),
+            _summaryRow(AppStrings.labelInvoiceTotal, totalPrice),
 
             const SizedBox(height: 8),
 
@@ -492,9 +493,9 @@ class _CartPanel extends StatelessWidget {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    )
                     : const Text(
-                        'إتمام الفاتورة',
+                        AppStrings.btnCheckoutInvoice,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -594,7 +595,7 @@ class _CatalogGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Center(child: Text('لا توجد عناصر مطابقة'));
+      return const Center(child: Text(AppStrings.noMatchingItems));
     }
 
     return LayoutBuilder(
@@ -705,10 +706,10 @@ class _DrinksGrid extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
-          return const Center(child: Text('حدث خطأ أثناء تحميل المشروبات'));
+          return const Center(child: Text(AppStrings.errorLoadingDrinks));
         }
         if (!snap.hasData || snap.data!.docs.isEmpty) {
-          return const Center(child: Text('لا توجد مشروبات متاحة'));
+          return const Center(child: Text(AppStrings.emptyDrinks));
         }
 
         final q = query.trim().toLowerCase();
@@ -784,11 +785,11 @@ class _SinglesGrid extends StatelessWidget {
         }
         if (snap.hasError) {
           return const Center(
-            child: Text('حدث خطأ أثناء تحميل المحاصيل المفردة'),
+            child: Text(AppStrings.errorLoadingSingles),
           );
         }
         if (!snap.hasData || snap.data!.docs.isEmpty) {
-          return const Center(child: Text('لا توجد محاصيل مفردة متاحة'));
+          return const Center(child: Text(AppStrings.emptySingles));
         }
 
         final Map<String, SingleGroup> groups = {};
@@ -832,7 +833,7 @@ class _SinglesGrid extends StatelessWidget {
               (it) => _CatalogItem(
                 title: it.name,
                 image: it.image,
-                subtitle: 'الأنواع: ${it.variants.length}',
+                subtitle: AppStrings.labelVariantsCount(it.variants.length),
                 onTap: () async {
                   try {
                     await showDialog(
@@ -873,10 +874,10 @@ class _BlendsGrid extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
-          return const Center(child: Text('حدث خطأ أثناء تحميل خلطات البن'));
+          return const Center(child: Text(AppStrings.errorLoadingBlends));
         }
         if (!snap.hasData || snap.data!.docs.isEmpty) {
-          return const Center(child: Text('لا توجد خلطات متاحة'));
+          return const Center(child: Text(AppStrings.emptyBlends));
         }
 
         final Map<String, BlendGroup> groups = {};
@@ -926,7 +927,7 @@ class _BlendsGrid extends StatelessWidget {
               (it) => _CatalogItem(
                 title: it.name,
                 image: it.image,
-                subtitle: 'الأنواع: ${it.variants.length}',
+                subtitle: AppStrings.labelVariantsCount(it.variants.length),
                 onTap: () async {
                   try {
                     await showDialog(
@@ -970,10 +971,10 @@ class _ExtrasGrid extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
-          return const Center(child: Text('حدث خطأ أثناء تحميل الإضافات'));
+          return const Center(child: Text(AppStrings.errorLoadingExtras));
         }
         if (!snap.hasData || snap.data!.docs.isEmpty) {
-          return const Center(child: Text('لا توجد إضافات متاحة'));
+          return const Center(child: Text(AppStrings.emptyExtras));
         }
 
         final q = query.trim().toLowerCase();
@@ -1014,7 +1015,7 @@ class _ExtrasGrid extends StatelessWidget {
               (it) => _CatalogItem(
                 title: it.name,
                 image: it.image,
-                subtitle: 'المخزون: ${it.stock}',
+                subtitle: AppStrings.stockPiecesAr(it.stock),
                 priceText: '${it.price.toStringAsFixed(2)} ج.م',
                 onTap: () async {
                   try {
@@ -1050,9 +1051,9 @@ class _CustomBlendEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final item = _CatalogItem(
-      title: 'تحضير خلطة مخصصة',
+      title: AppStrings.titleCustomBlendEntry,
       image: 'assets/custom.jpg',
-      subtitle: 'اخلط البن كما تحب من المكونات المتاحة',
+      subtitle: AppStrings.subtitleCustomBlendEntry,
       onTap: () async {
         try {
           await Navigator.of(context).push(

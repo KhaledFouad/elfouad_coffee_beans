@@ -1,7 +1,8 @@
-// extras_page.dart
+﻿// extras_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/extra_dialog.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
 
 class ExtrasPage extends StatelessWidget {
@@ -10,7 +11,7 @@ class ExtrasPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ===== AppBar بنفس ستايل DrinksPage =====
+      // ===== AppBar Ø¨Ù†ÙØ³ Ø³ØªØ§ÙŠÙ„ DrinksPage =====
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(64),
         child: ClipRRect(
@@ -25,10 +26,10 @@ class ExtrasPage extends StatelessWidget {
                 color: Colors.white,
               ),
               onPressed: () => Navigator.maybePop(context),
-              tooltip: 'رجوع',
+              tooltip: AppStrings.tooltipBack,
             ),
             title: const Text(
-              'بسكوت ومعمول',
+              AppStrings.titleCookiesSection,
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 35,
@@ -52,7 +53,7 @@ class ExtrasPage extends StatelessWidget {
       ),
 
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        // بنجيب عناصر biscuits فقط (حسب الـ seed اللي بعته)
+        // Ø¨Ù†Ø¬ÙŠØ¨ Ø¹Ù†Ø§ØµØ± biscuits ÙÙ‚Ø· (Ø­Ø³Ø¨ Ø§Ù„Ù€ seed Ø§Ù„Ù„ÙŠ Ø¨Ø¹ØªÙ‡)
         stream: FirebaseFirestore.instance
             .collection('extras')
             .where('category', isEqualTo: 'biscuits')
@@ -67,10 +68,10 @@ class ExtrasPage extends StatelessWidget {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) showErrorDialog(context, e, snap.stackTrace);
             });
-            return const Center(child: Text('حدث خطأ أثناء تحميل الأصناف'));
+            return const Center(child: Text(AppStrings.errorLoadingCookies));
           }
           if (!snap.hasData || snap.data!.docs.isEmpty) {
-            return const Center(child: Text('لا يوجد أصناف (بسكوت/معمول)'));
+            return const Center(child: Text(AppStrings.emptyCookies));
           }
 
           late final List<_ExtraItem> items;
@@ -103,15 +104,15 @@ class ExtrasPage extends StatelessWidget {
               );
             }).toList();
 
-            // === ترتيب مخصص: حسب أصنافك، ثم أبجديًا ===
+            // === ØªØ±ØªÙŠØ¨ Ù…Ø®ØµØµ: Ø­Ø³Ø¨ Ø£ØµÙ†Ø§ÙÙƒØŒ Ø«Ù… Ø£Ø¨Ø¬Ø¯ÙŠÙ‹Ø§ ===
             const preferredOrderExtras = <String>[
-              'تمر دارك شوكلت',
-              'تمر وايت شوكلت',
-              'معمول سادة',
-              'معمول تمر',
-              'معمول قرفة',
-              'معمول وايت شوكلت',
-              'معمول دارك شوكلت',
+              'ØªÙ…Ø± Ø¯Ø§Ø±Ùƒ Ø´ÙˆÙƒÙ„Øª',
+              'ØªÙ…Ø± ÙˆØ§ÙŠØª Ø´ÙˆÙƒÙ„Øª',
+              'Ù…Ø¹Ù…ÙˆÙ„ Ø³Ø§Ø¯Ø©',
+              'Ù…Ø¹Ù…ÙˆÙ„ ØªÙ…Ø±',
+              'Ù…Ø¹Ù…ÙˆÙ„ Ù‚Ø±ÙØ©',
+              'Ù…Ø¹Ù…ÙˆÙ„ ÙˆØ§ÙŠØª Ø´ÙˆÙƒÙ„Øª',
+              'Ù…Ø¹Ù…ÙˆÙ„ Ø¯Ø§Ø±Ùƒ Ø´ÙˆÙƒÙ„Øª',
             ];
             final rank = <String, int>{
               for (var i = 0; i < preferredOrderExtras.length; i++)
@@ -123,13 +124,13 @@ class ExtrasPage extends StatelessWidget {
               if (ra != rb) return ra.compareTo(rb);
               return a.name.compareTo(b.name);
             });
-            // === نهاية الترتيب ===
+            // === Ù†Ù‡Ø§ÙŠØ© Ø§Ù„ØªØ±ØªÙŠØ¨ ===
           } catch (e, st) {
             logError(e, st);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) showErrorDialog(context, e, st);
             });
-            return const Center(child: Text('تعذر قراءة بيانات الأصناف'));
+            return const Center(child: Text(AppStrings.errorReadingItems));
           }
 
           return LayoutBuilder(
@@ -159,14 +160,14 @@ class ExtrasPage extends StatelessWidget {
                     title: it.name,
                     image: it.image,
                     subtitle:
-                        'سعر: ${it.priceSell.toStringAsFixed(2)} ج / قطعة • مخزون: ${it.stockUnits}',
+                        AppStrings.extraPriceAndStock(it.priceSell, it.stockUnits),
                     onTap: () async {
                       try {
                         await showDialog(
                           context: context,
                           builder: (_) => ExtraDialog(
                             extraId: it.id,
-                            extraData: it.raw, // نفس الماب اللي قريتها
+                            extraData: it.raw, // Ù†ÙØ³ Ø§Ù„Ù…Ø§Ø¨ Ø§Ù„Ù„ÙŠ Ù‚Ø±ÙŠØªÙ‡Ø§
                           ),
                         );
                       } catch (e, st) {
@@ -237,7 +238,7 @@ class _ExtraCard extends StatelessWidget {
               errorBuilder: (_, __, ___) =>
                   Container(color: Colors.grey.shade300),
             ),
-            // طبقة تغميق خفيفة
+            // Ø·Ø¨Ù‚Ø© ØªØºÙ…ÙŠÙ‚ Ø®ÙÙŠÙØ©
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -250,7 +251,7 @@ class _ExtraCard extends StatelessWidget {
                 ),
               ),
             ),
-            // العنوان + سطر معلومات صغير
+            // Ø§Ù„Ø¹Ù†ÙˆØ§Ù† + Ø³Ø·Ø± Ù…Ø¹Ù„ÙˆÙ…Ø§Øª ØµØºÙŠØ±
             Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -305,7 +306,7 @@ class _ExtraCard extends StatelessWidget {
   }
 }
 
-/// Dialog بسيط لاختيار كمية وبيع بالقطعة
+/// Dialog Ø¨Ø³ÙŠØ· Ù„Ø§Ø®ØªÙŠØ§Ø± ÙƒÙ…ÙŠØ© ÙˆØ¨ÙŠØ¹ Ø¨Ø§Ù„Ù‚Ø·Ø¹Ø©
 Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
   final ctrl = TextEditingController(text: '1');
   final ok = await showDialog<bool>(
@@ -315,16 +316,18 @@ Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('سعر القطعة: ${item.priceSell.toStringAsFixed(2)} ج'),
+          Text(
+            '${AppStrings.labelUnitPricePiece} ${item.priceSell.toStringAsFixed(2)} ${AppStrings.currencyEgpLetter}',
+          ),
           const SizedBox(height: 8),
-          Text('المخزون الحالي: ${item.stockUnits} قطعة'),
+          Text(AppStrings.stockPiecesAr(item.stockUnits)),
           const SizedBox(height: 12),
           TextField(
             controller: ctrl,
             textAlign: TextAlign.center,
             keyboardType: const TextInputType.numberWithOptions(),
             decoration: const InputDecoration(
-              labelText: 'الكمية (قطع)',
+              labelText: AppStrings.labelQuantityPieces,
               border: OutlineInputBorder(),
               isDense: true,
             ),
@@ -334,11 +337,11 @@ Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('إلغاء'),
+          child: const Text(AppStrings.dialogCancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          child: const Text('بيع'),
+          child: const Text(AppStrings.btnSellAr),
         ),
       ],
     ),
@@ -351,7 +354,7 @@ Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
   if (!context.mounted) return;
 }
 
-/// بيع + خصم مخزون + تسجيل في sales (ترانزاكشن)
+/// Ø¨ÙŠØ¹ + Ø®ØµÙ… Ù…Ø®Ø²ÙˆÙ† + ØªØ³Ø¬ÙŠÙ„ ÙÙŠ sales (ØªØ±Ø§Ù†Ø²Ø§ÙƒØ´Ù†)
 Future<void> _sellExtraTransaction(
   BuildContext context,
   String extraId,
@@ -363,7 +366,7 @@ Future<void> _sellExtraTransaction(
   try {
     await db.runTransaction((tx) async {
       final snap = await tx.get(ref);
-      if (!snap.exists) throw 'الصنف غير موجود';
+      if (!snap.exists) throw AppStrings.errorProductNotFound;
       final data = snap.data() ?? {};
 
       double numValue(v) =>
@@ -377,22 +380,25 @@ Future<void> _sellExtraTransaction(
       final costUnit = numValue(data['cost_unit']);
       final stockUnits = intValue(data['stock_units']);
 
-      if (qty <= 0) throw 'كمية غير صالحة';
+      if (qty <= 0) throw AppStrings.errorInvalidQuantity;
       if (stockUnits < qty) {
-        throw 'المخزون غير كافٍ: المتاح $stockUnits قطعة';
+        throw AppStrings.stockNotEnough(
+          stockUnits,
+          AppStrings.labelPieceUnit,
+        );
       }
 
       final totalPrice = priceSell * qty;
       final totalCost = costUnit * qty;
       final profit = totalPrice - totalCost;
 
-      // خصم المخزون
+      // Ø®ØµÙ… Ø§Ù„Ù…Ø®Ø²ÙˆÙ†
       tx.update(ref, {
         'stock_units': stockUnits - qty,
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      // إنشاء عملية بيع في sales
+      // Ø¥Ù†Ø´Ø§Ø¡ Ø¹Ù…Ù„ÙŠØ© Ø¨ÙŠØ¹ ÙÙŠ sales
       final saleRef = db.collection('sales').doc();
       tx.set(saleRef, {
         'type': 'extra',
@@ -414,7 +420,7 @@ Future<void> _sellExtraTransaction(
     });
   } catch (e, st) {
     logError(e, st);
-    // إظهار رسالة مفهومة للمستخدم
+    // Ø¥Ø¸Ù‡Ø§Ø± Ø±Ø³Ø§Ù„Ø© Ù…ÙÙ‡ÙˆÙ…Ø© Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù…
     if (context.mounted) {
       await showErrorDialog(context, e, st);
     }
