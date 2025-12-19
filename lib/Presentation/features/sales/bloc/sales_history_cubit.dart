@@ -1,0 +1,204 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../data/repositories/sales_history_repository.dart';
+import '../models/sale_record.dart';
+import '../models/sales_day_group.dart';
+import '../utils/sale_utils.dart';
+import 'sales_history_state.dart';
+
+class SalesHistoryCubit extends Cubit<SalesHistoryState> {
+  SalesHistoryCubit({required SalesHistoryRepository repository})
+      : _repository = repository,
+        super(SalesHistoryState.initial());
+
+  final SalesHistoryRepository _repository;
+
+  QueryDocumentSnapshot<Map<String, dynamic>>? _lastDoc;
+
+  Future<void> initialize() async {
+    await _loadFirstPage();
+  }
+
+  Future<void> loadMore() async {
+    if (state.isLoadingMore || !state.hasMore) return;
+
+    emit(state.copyWith(isLoadingMore: true));
+
+    final range = state.range;
+    final page = await _repository.fetchPage(
+      range: range,
+      startAfter: _lastDoc,
+    );
+
+    _lastDoc = page.lastDoc;
+
+    final moreRecords = page.docs.map(SaleRecord.new).toList();
+    final existing = List<SaleRecord>.from(state.allRecords);
+    final existingIds = existing.map((e) => e.id).toSet();
+    for (final r in moreRecords) {
+      if (!existingIds.contains(r.id)) {
+        existing.add(r);
+      }
+    }
+
+    emit(
+      state.copyWith(
+        allRecords: existing,
+        groups: _buildGroups(existing, range),
+        hasMore: page.hasMore,
+        isLoadingMore: false,
+      ),
+    );
+  }
+
+  Future<void> setRange(DateTimeRange? range) async {
+    final resolved = range ?? defaultSalesRange();
+    emit(
+      state.copyWith(
+        customRange: range,
+        range: resolved,
+      ),
+    );
+    await _loadFirstPage();
+  }
+
+  DateTimeRange normalizePickerRange(DateTimeRange picked) {
+    final start = DateTime(
+      picked.start.year,
+      picked.start.month,
+      picked.start.day,
+      4,
+    );
+    final endBase = DateTime(
+      picked.end.year,
+      picked.end.month,
+      picked.end.day,
+      4,
+    );
+    return DateTimeRange(
+      start: start,
+      end: endBase.add(const Duration(days: 1)),
+    );
+  }
+
+  Future<void> settleDeferredSale(String saleId) async {
+    await _repository.settleDeferredSale(saleId);
+    await _loadFirstPage();
+  }
+
+  Future<void> _loadFirstPage() async {
+    emit(
+      state.copyWith(
+        isLoadingFirst: true,
+        isLoadingMore: false,
+        hasMore: true,
+        isRangeTotalLoading: true,
+        fullTotalsByDay: const {},
+      ),
+    );
+
+    final range = state.range;
+    _lastDoc = null;
+
+    final page = await _repository.fetchPage(range: range, startAfter: null);
+
+    _lastDoc = page.lastDoc;
+
+    final records = page.docs.map(SaleRecord.new).toList();
+
+    emit(
+      state.copyWith(
+        groups: _buildGroups(records, range),
+        allRecords: records,
+        hasMore: page.hasMore,
+        isLoadingFirst: false,
+      ),
+    );
+
+    unawaited(_loadFullTotalsPerDay(range));
+  }
+
+  Future<void> _loadFullTotalsPerDay(DateTimeRange range) async {
+    try {
+      emit(state.copyWith(isRangeTotalLoading: true));
+
+      final docs = await _repository.fetchAllForRange(range: range);
+      final records = docs.map(SaleRecord.new).toList();
+
+      bool inRange(DateTime value) {
+        return !value.isBefore(range.start) && value.isBefore(range.end);
+      }
+
+      final Map<String, List<SaleRecord>> grouped = {};
+      for (final record in records) {
+        final effective = record.effectiveTime;
+        if (!inRange(effective)) continue;
+        final shifted = shiftDayByFourHours(effective);
+        final key =
+            '${shifted.year}-${shifted.month.toString().padLeft(2, '0')}-${shifted.day.toString().padLeft(2, '0')}';
+        grouped.putIfAbsent(key, () => <SaleRecord>[]).add(record);
+      }
+
+      final Map<String, double> totals = {};
+      grouped.forEach((key, list) {
+        totals[key] = _sumPaidOnly(list);
+      });
+
+      emit(state.copyWith(fullTotalsByDay: totals));
+    } finally {
+      emit(state.copyWith(isRangeTotalLoading: false));
+    }
+  }
+
+  List<SalesDayGroup> _buildGroups(
+    List<SaleRecord> records,
+    DateTimeRange range,
+  ) {
+    final start = range.start;
+    final end = range.end;
+
+    bool inRange(DateTime value) {
+      return !value.isBefore(start) && value.isBefore(end);
+    }
+
+    final filtered = <SaleRecord>[];
+    for (final record in records) {
+      final effective = record.effectiveTime;
+      final include = (record.isDeferred && !record.isPaid) || inRange(effective);
+      if (include) {
+        filtered.add(record);
+      }
+    }
+
+    final Map<String, List<SaleRecord>> grouped = {};
+    for (final record in filtered) {
+      final effective = record.effectiveTime;
+      final shifted = shiftDayByFourHours(effective);
+      final key =
+          '${shifted.year}-${shifted.month.toString().padLeft(2, '0')}-${shifted.day.toString().padLeft(2, '0')}';
+      grouped.putIfAbsent(key, () => <SaleRecord>[]).add(record);
+    }
+
+    final dayKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return dayKeys.map((key) {
+      final entries = grouped[key]!;
+      final totalPaid = _sumPaidOnly(entries);
+      return SalesDayGroup(label: key, entries: entries, totalPaid: totalPaid);
+    }).toList();
+  }
+
+  double _sumPaidOnly(List<SaleRecord> entries) {
+    double sum = 0;
+    for (final entry in entries) {
+      if (!entry.isComplimentary && entry.isPaid) {
+        sum += entry.totalPrice;
+      }
+    }
+    return sum;
+  }
+}

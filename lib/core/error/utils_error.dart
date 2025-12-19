@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 
 // استيراد مشروط: على الويب نقرأ خصائص JS، وعلى الموبايل نرجّع null
 import 'js_safe_stub.dart' if (dart.library.js) 'js_safe_web.dart';
@@ -72,12 +73,12 @@ Future<void> showErrorDialog(
   return showDialog(
     context: context,
     builder: (_) => AlertDialog(
-      title: const Text('تعذر إتمام العملية'),
+      title: const Text(AppStrings.dialogUnableToCompleteOperation),
       content: SingleChildScrollView(child: Text(msg)),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('حسناً'),
+          child: const Text(AppStrings.dialogOk),
         ),
       ],
     ),

@@ -1,6 +1,9 @@
+// ignore_for_file: depend_on_referenced_packages
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/sales/models/sale_component.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/sales/utils/sale_utils.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -213,7 +216,18 @@ void main() {
           'items': [{}, {}],
           'total_price': 125.5,
         };
-        expect(buildTitleLine(data, 'invoice'), 'فاتورة - 2 بند - 125.50');
+        expect(
+          buildTitleLine(data, 'invoice'),
+          AppStrings.saleTitleInvoice(2, '125.50'),
+        );
+      });
+
+      test('formats title for "invoice" with number', () {
+        final data = {'invoice_number': 3};
+        expect(
+          buildTitleLine(data, 'invoice'),
+          AppStrings.saleTitleInvoiceNumber(3),
+        );
       });
 
       test('formats title for "single"', () {
@@ -227,3 +241,5 @@ void main() {
     });
   });
 }
+
+

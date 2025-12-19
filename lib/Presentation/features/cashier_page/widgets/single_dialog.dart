@@ -6,7 +6,10 @@ import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmode
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'dialogs/dialog_action_row.dart';
+import 'dialogs/dialog_image_header.dart';
 
 class UserFriendly implements Exception {
   final String message;
@@ -42,6 +45,7 @@ class SingleDialog extends StatefulWidget {
 class _SingleDialogState extends State<SingleDialog> {
   bool _busy = false;
   String? _fatal;
+  bool get _canQuickConfirm => widget.cartMode || widget.onAddToCart != null;
 
   // roast (variant)
   late final List<String> _roastOptions;
@@ -59,6 +63,7 @@ class _SingleDialogState extends State<SingleDialog> {
   CalcMode _mode = CalcMode.byGrams;
 
   // محوّج
+  bool _isComplimentary = false;
   bool _isSpiced = false;
 
   // جينسنج
@@ -218,7 +223,8 @@ class _SingleDialogState extends State<SingleDialog> {
   double get _pricePerG =>
       _sellPerG + (_isSpiced && _canSpice ? _spicePricePerG : 0.0);
 
-  double get _totalPrice => _beansAmount + _spiceAmount + _ginsengPriceAmount;
+  double get _totalPrice =>
+      _isComplimentary ? 0.0 : _beansAmount + _spiceAmount + _ginsengPriceAmount;
 
   double get _totalCost =>
       _beansCostAmount + _spiceCostAmount + _ginsengCostAmount;
@@ -227,11 +233,11 @@ class _SingleDialogState extends State<SingleDialog> {
   CartLine _buildCartLine() {
     final sel = _selected;
     if (sel == null) {
-      throw UserFriendly('اختر درجة التحميص/النوع أولاً.');
+      throw UserFriendly(AppStrings.errorSelectRoast);
     }
     final grams = _grams;
     if (grams <= 0) {
-      throw UserFriendly('من فضلك أدخل كمية صحيحة بالجرام أو السعر.');
+      throw UserFriendly(AppStrings.errorEnterValidGramsOrPrice);
     }
 
     final price = _totalPrice;
@@ -273,7 +279,7 @@ class _SingleDialogState extends State<SingleDialog> {
       unitCost: gramsDouble > 0 ? (cost / gramsDouble) : 0.0,
       lineTotalPrice: price,
       lineTotalCost: cost,
-      isComplimentary: false,
+      isComplimentary: _isComplimentary,
       isDeferred: false,
       note: '',
       meta: meta,
@@ -404,7 +410,7 @@ class _SingleDialogState extends State<SingleDialog> {
                   ),
                   onPressed: _busy ? null : () => _applyPadKey('done'),
                   child: const Text(
-                    'تم',
+                    AppStrings.btnDone,
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -428,7 +434,7 @@ class _SingleDialogState extends State<SingleDialog> {
       child: Row(
         children: [
           const Text(
-            'جينسنج',
+            AppStrings.labelGinseng,
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           ),
           const Spacer(),
@@ -447,7 +453,7 @@ class _SingleDialogState extends State<SingleDialog> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(
-              '$_ginsengGrams جم',
+              '$_ginsengGrams ${AppStrings.labelGramsShort}',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
@@ -467,12 +473,12 @@ class _SingleDialogState extends State<SingleDialog> {
   Future<void> _commitSale() async {
     final sel = _selected;
     if (sel == null) {
-      setState(() => _fatal = 'اختر درجة التحميص أولاً.');
+      setState(() => _fatal = AppStrings.errorSelectRoast);
       await showErrorDialog(context, _fatal!);
       return;
     }
     if (_grams <= 0) {
-      setState(() => _fatal = 'من فضلك أدخل كمية صحيحة بالجرام أو السعر.');
+      setState(() => _fatal = AppStrings.errorEnterValidGramsOrPrice);
       await showErrorDialog(context, _fatal!);
       return;
     }
@@ -488,11 +494,39 @@ class _SingleDialogState extends State<SingleDialog> {
       if (!mounted) return;
       Navigator.pop(context, line);
     } catch (e) {
-      final msg = e is UserFriendly ? e.message : 'حدث خطأ غير متوقع.';
+      final msg = e is UserFriendly ? e.message : AppStrings.errorUnexpected;
       if (mounted) {
         setState(() => _fatal = msg);
         await showErrorDialog(context, msg);
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _commitInstantInvoice() async {
+    if (!_canQuickConfirm || _busy) return;
+    setState(() {
+      _busy = true;
+      _fatal = null;
+    });
+    try {
+      final line = _buildCartLine();
+      final tempCart = CartState();
+      tempCart.addLine(line);
+      if (line.isComplimentary) {
+        tempCart.setInvoiceComplimentary(true);
+      }
+      await CartCheckout.commitInvoice(cart: tempCart);
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      Navigator.pop(context, line);
+      messenger?.showSnackBar(
+        const SnackBar(content: Text(AppStrings.dialogInvoiceCreated)),
+      );
+    } catch (e, st) {
+      logError(e, st);
+      if (mounted) await showErrorDialog(context, e, st);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -535,47 +569,7 @@ class _SingleDialogState extends State<SingleDialog> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Header
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(18),
-                      ),
-                      child: Stack(
-                        children: [
-                          Image.asset(
-                            image,
-                            height: 140,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
-                          Container(
-                            height: 140,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 0.15),
-                                  Colors.black.withValues(alpha: 0.55),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Positioned.fill(
-                            child: Center(
-                              child: Text(
-                                name,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 27,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    DialogImageHeader(image: image, title: name),
 
                     // Body
                     Padding(
@@ -598,8 +592,13 @@ class _SingleDialogState extends State<SingleDialog> {
                                       !_stocksLoading && stock <= 0.0;
 
                                   final label = StringBuffer()
-                                    ..write(r.isEmpty ? 'بدون' : r);
-                                  if (disabled) label.write(' (غير متاح)');
+                                    ..write(
+                                        r.isEmpty ? AppStrings.labelNone : r);
+                                  if (disabled) {
+                                    label.write(
+                                      ' (${AppStrings.labelUnavailable})',
+                                    );
+                                  }
 
                                   return ChoiceChip(
                                     label: Text(
@@ -641,15 +640,28 @@ class _SingleDialogState extends State<SingleDialog> {
                           // === محوّج فقط في الصف ===
                           Row(
                             children: [
-                              if (_canSpice)
+                              Expanded(
+                                child: ToggleCard(
+                                  title: AppStrings.labelHospitality,
+                                  value: _isComplimentary,
+                                  busy: _busy,
+                                  onChanged: (v) =>
+                                      setState(() => _isComplimentary = v),
+                                  leadingIcon: Icons.card_giftcard,
+                                ),
+                              ),
+                              if (_canSpice) ...[
+                                const SizedBox(width: 8),
                                 Expanded(
                                   child: ToggleCard(
-                                    title: 'محوّج',
+                                    title: AppStrings.labelSpiced,
                                     value: _isSpiced,
+                                    busy: _busy,
                                     onChanged: (v) =>
                                         setState(() => _isSpiced = v),
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -665,12 +677,12 @@ class _SingleDialogState extends State<SingleDialog> {
                               segments: const [
                                 ButtonSegment(
                                   value: CalcMode.byGrams,
-                                  label: Text('حسب الوزن'),
+                                  label: Text(AppStrings.labelBasedOnWeight),
                                   icon: Icon(Icons.scale),
                                 ),
                                 ButtonSegment(
                                   value: CalcMode.byMoney,
-                                  label: Text('حسب المبلغ'),
+                                  label: Text(AppStrings.labelBasedOnAmount),
                                   icon: Icon(Icons.payments_outlined),
                                 ),
                               ],
@@ -703,7 +715,7 @@ class _SingleDialogState extends State<SingleDialog> {
                               alignment: Alignment.centerRight,
                               child: Row(
                                 children: [
-                                  const Text('الكمية (جم)'),
+                                  const Text(AppStrings.labelQuantityGrams),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: TextFormField(
@@ -714,7 +726,7 @@ class _SingleDialogState extends State<SingleDialog> {
                                           ? null
                                           : () => _openPad(_PadTarget.grams),
                                       decoration: const InputDecoration(
-                                        hintText: 'مثال: 250',
+                                        hintText: AppStrings.hintExample250,
                                         isDense: true,
                                         contentPadding: EdgeInsets.symmetric(
                                           vertical: 12,
@@ -732,7 +744,7 @@ class _SingleDialogState extends State<SingleDialog> {
                               alignment: Alignment.centerRight,
                               child: Row(
                                 children: [
-                                  const Text('المبلغ (ج.م)'),
+                                  const Text(AppStrings.labelAmountEgp),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: TextFormField(
@@ -743,7 +755,7 @@ class _SingleDialogState extends State<SingleDialog> {
                                           ? null
                                           : () => _openPad(_PadTarget.money),
                                       decoration: const InputDecoration(
-                                        hintText: 'مثال: 100',
+                                        hintText: AppStrings.hintExample100,
                                         isDense: true,
                                         contentPadding: EdgeInsets.symmetric(
                                           vertical: 12,
@@ -760,7 +772,7 @@ class _SingleDialogState extends State<SingleDialog> {
                             Align(
                               alignment: Alignment.centerRight,
                               child: Text(
-                                '≈ الجرامات المحسوبة: ${_grams.toString()} جم',
+                                AppStrings.approxCalculatedGrams(_grams),
                                 style: const TextStyle(
                                   color: Colors.black54,
                                   fontSize: 20,
@@ -770,8 +782,16 @@ class _SingleDialogState extends State<SingleDialog> {
                           ],
 
                           const SizedBox(height: 12),
-                          _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
-                          _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
+                          _KVRow(
+                            k: AppStrings.labelPricePerKg,
+                            v: _sellPerKg,
+                            suffix: AppStrings.labelGramsShort,
+                          ),
+                          _KVRow(
+                            k: AppStrings.labelPricePerGram,
+                            v: _pricePerG,
+                            suffix: AppStrings.labelGramsShort,
+                          ),
                           const SizedBox(height: 8),
 
                           // الإجمالي
@@ -789,7 +809,7 @@ class _SingleDialogState extends State<SingleDialog> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
-                                  'الإجمالي',
+                                  AppStrings.labelInvoiceTotal,
                                   style: TextStyle(fontWeight: FontWeight.w600),
                                 ),
                                 Text(
@@ -824,50 +844,12 @@ class _SingleDialogState extends State<SingleDialog> {
                     const Divider(height: 1),
                     Padding(
                       padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () => Navigator.pop(context),
-                              child: const Text(
-                                'إلغاء',
-                                style: TextStyle(
-                                  color: Color(0xFF543824),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton(
-                              style: ButtonStyle(
-                                backgroundColor: WidgetStateProperty.all(
-                                  const Color(0xFF543824),
-                                ),
-                              ),
-                              onPressed: _busy ? null : _commitSale,
-                              child: _busy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'تأكيد',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
+                      child: DialogActionRow(
+                        busy: _busy,
+                        onCancel: () => Navigator.pop(context),
+                        onConfirm: _commitSale,
+                        onConfirmLongPress:
+                            _canQuickConfirm ? _commitInstantInvoice : null,
                       ),
                     ),
                   ],

@@ -2,13 +2,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/drink_dialog.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_breakpoints.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'package:responsive_framework/responsive_framework.dart';
 
 class DrinksPage extends StatelessWidget {
   const DrinksPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final titleSize =
+        ResponsiveValue<double>(
+          context,
+          defaultValue: 35,
+          conditionalValues: const [
+            Condition.smallerThan(name: TABLET, value: 24),
+            Condition.between(start: AppBreakpoints.tabletStart, end: AppBreakpoints.tabletEnd, value: 30),
+          ],
+        ).value;
+
     return Scaffold(
       // ===== AppBar رايق بجراديانت وحدود سفلية ناعمة =====
       appBar: PreferredSize(
@@ -25,13 +38,13 @@ class DrinksPage extends StatelessWidget {
                 color: Colors.white,
               ),
               onPressed: () => Navigator.maybePop(context),
-              tooltip: 'رجوع',
+              tooltip: AppStrings.tooltipBack,
             ),
-            title: const Text(
-              'المشروبات',
+            title: Text(
+              AppStrings.titleDrinksSection,
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 35,
+                fontSize: titleSize,
                 color: Colors.white,
               ),
             ),
@@ -63,10 +76,10 @@ class DrinksPage extends StatelessWidget {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) showErrorDialog(context, e, snap.stackTrace);
             });
-            return const Center(child: Text('حدث خطأ أثناء تحميل المشروبات'));
+            return const Center(child: Text(AppStrings.errorLoadingDrinks));
           }
           if (!snap.hasData || snap.data!.docs.isEmpty) {
-            return const Center(child: Text('لا يوجد مشروبات'));
+            return const Center(child: Text(AppStrings.noDrinks));
           }
 
           late final List<_DrinkItem> items;
@@ -115,23 +128,17 @@ class DrinksPage extends StatelessWidget {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) showErrorDialog(context, e, st);
             });
-            return const Center(child: Text('تعذر قراءة بيانات المشروبات'));
+            return const Center(child: Text(AppStrings.errorReadingDrinks));
           }
 
           return LayoutBuilder(
             builder: (context, c) {
               final max = c.maxWidth;
-              final crossAxisCount = max >= 1200
-                  ? 4
-                  : max >= 900
-                  ? 3
-                  : max >= 600
-                  ? 2
-                  : 1;
+              final crossAxisCount = AppBreakpoints.gridCount(max);
               const spacing = 16.0;
 
               return GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                padding: AppBreakpoints.gridPagePadding(max),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   mainAxisSpacing: spacing,
@@ -194,6 +201,16 @@ class _DrinkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleSize =
+        ResponsiveValue<double>(
+          context,
+          defaultValue: 30,
+          conditionalValues: const [
+            Condition.smallerThan(name: TABLET, value: 22),
+            Condition.between(start: AppBreakpoints.tabletStart, end: AppBreakpoints.tabletEnd, value: 26),
+          ],
+        ).value;
+
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(18),
@@ -232,9 +249,9 @@ class _DrinkCard extends StatelessWidget {
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 30,
+                    fontSize: titleSize,
                     fontWeight: FontWeight.w800,
                     height: 1.2,
                     shadows: [
@@ -254,3 +271,5 @@ class _DrinkCard extends StatelessWidget {
     );
   }
 }
+
+

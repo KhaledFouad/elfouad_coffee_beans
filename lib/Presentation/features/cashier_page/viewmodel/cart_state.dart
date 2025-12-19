@@ -1,6 +1,7 @@
 ﻿import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/foundation.dart';
 
 /// Represents how much stock to deduct from a Firestore document.
@@ -151,6 +152,7 @@ class CartLine {
 class CartState extends ChangeNotifier {
   final List<CartLine> _lines = [];
   bool _invoiceDeferred = false;
+  bool _invoiceComplimentary = false;
   String _invoiceNote = '';
   String _paymentMethod = 'cash';
 
@@ -161,9 +163,16 @@ class CartState extends ChangeNotifier {
       _lines.fold<double>(0, (acc, l) => acc + l.lineTotalPrice);
   double get totalCost =>
       _lines.fold<double>(0, (acc, l) => acc + l.lineTotalCost);
-  double get totalProfit => totalPrice - totalCost;
+  double get totalProfit {
+    if (_invoiceComplimentary) return 0.0;
+    return _lines.fold<double>(0.0, (acc, line) {
+      if (line.isComplimentary) return acc;
+      return acc + (line.lineTotalPrice - line.lineTotalCost);
+    });
+  }
 
   bool get invoiceDeferred => _invoiceDeferred;
+  bool get invoiceComplimentary => _invoiceComplimentary;
   String get invoiceNote => _invoiceNote;
   String get paymentMethod => _paymentMethod;
 
@@ -180,6 +189,7 @@ class CartState extends ChangeNotifier {
   void clear() {
     _lines.clear();
     _invoiceDeferred = false;
+    _invoiceComplimentary = false;
     _invoiceNote = '';
     _paymentMethod = 'cash';
     notifyListeners();
@@ -187,6 +197,18 @@ class CartState extends ChangeNotifier {
 
   void setInvoiceDeferred(bool value) {
     _invoiceDeferred = value;
+    if (value) {
+      _invoiceComplimentary = false;
+    }
+    notifyListeners();
+  }
+
+  void setInvoiceComplimentary(bool value) {
+    _invoiceComplimentary = value;
+    if (value) {
+      _invoiceDeferred = false;
+      _invoiceNote = '';
+    }
     notifyListeners();
   }
 
@@ -201,7 +223,8 @@ class CartState extends ChangeNotifier {
   }
 }
 
-/// Commits all lines in the cart as a single invoice inside the sales collection.
+/// Commits cart lines to the sales collection.
+/// If the cart has one line, stores it as the item type instead of an invoice.
 class CartCheckout {
   CartCheckout._();
 
@@ -210,32 +233,70 @@ class CartCheckout {
     return double.tryParse(v?.toString() ?? '') ?? 0.0;
   }
 
-static Future<String> commitInvoice({
+  static int _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v?.toString() ?? '') ?? 0;
+  }
+
+  static Future<String> commitInvoice({
     required CartState cart,
     FirebaseFirestore? firestore,
   }) async {
     if (cart.isEmpty) {
-      throw StateError('السلة فارغة، أضف عناصر أولاً.');
+      throw StateError('${AppStrings.cartEmptyAddProductsFirst}.');
     }
 
     final db = firestore ?? FirebaseFirestore.instance;
-    final invoiceRef = db.collection('sales').doc();
+    final saleRef = db.collection('sales').doc();
 
     // دمج تأثيرات المخزون لنفس الصنف في Impact واحد
     final mergedImpacts = <String, StockImpact>{};
     for (final line in cart.lines) {
       for (final imp in line.impacts) {
         final existing = mergedImpacts[imp.key];
-        mergedImpacts[imp.key] =
-            existing == null ? imp : existing.mergeWith(imp);
+        mergedImpacts[imp.key] = existing == null
+            ? imp
+            : existing.mergeWith(imp);
       }
     }
 
-    final totalPrice = cart.totalPrice;
-    final totalCost = cart.totalCost;
-    final profit = totalPrice - totalCost;
-    final isDeferred = cart.invoiceDeferred;
-    final note = cart.invoiceNote.trim();
+    final isSingleLine = cart.lines.length == 1;
+    final CartLine? singleLine = isSingleLine ? cart.lines.first : null;
+    final lineComplimentary = singleLine?.isComplimentary ?? false;
+    final lineDeferred = singleLine?.isDeferred ?? false;
+
+    final isComplimentary = isSingleLine
+        ? (cart.invoiceComplimentary || lineComplimentary)
+        : cart.invoiceComplimentary;
+
+    final isDeferred = (isSingleLine
+            ? (cart.invoiceDeferred || lineDeferred)
+            : cart.invoiceDeferred) &&
+        !isComplimentary;
+
+    final note = isDeferred
+        ? (cart.invoiceNote.trim().isNotEmpty
+            ? cart.invoiceNote.trim()
+            : (singleLine?.note.trim() ?? ''))
+        : '';
+
+    final totalCost =
+        isSingleLine ? singleLine!.lineTotalCost : cart.totalCost;
+    final totalPrice = isComplimentary
+        ? 0.0
+        : (isSingleLine ? singleLine!.lineTotalPrice : cart.totalPrice);
+    final double profit;
+    if (isComplimentary) {
+      profit = 0.0;
+    } else if (isSingleLine) {
+      profit = totalPrice - totalCost;
+    } else {
+      profit = cart.lines.fold<double>(0.0, (acc, line) {
+        if (line.isComplimentary) return acc;
+        return acc + (line.lineTotalPrice - line.lineTotalCost);
+      });
+    }
 
     await db.runTransaction((tx) async {
       // ===== 1) اقرأ كل مستندات المخزون واحسب القيم الجديدة (بدون أي كتابة) =====
@@ -261,7 +322,7 @@ static Future<String> commitInvoice({
           final remaining = current.toStringAsFixed(0);
           final need = impact.amount.toStringAsFixed(0);
           throw Exception(
-            'المخزون غير كافٍ'
+            'AppStrings.errorStockNotEnoughSimple'
             '${impact.label != null ? ' لـ ${impact.label}' : ''}. '
             'المتاح: $remaining • المطلوب: $need',
           );
@@ -278,22 +339,155 @@ static Future<String> commitInvoice({
       });
 
       // ===== 3) احفظ الفاتورة =====
-      tx.set(invoiceRef, {
-        'type': 'invoice',
-        'items': cart.lines.map((l) => l.toMap()).toList(),
-        'total_price': totalPrice,
-        'total_cost': totalCost,
-        'profit_total': profit,
-        'is_deferred': isDeferred,
-        'paid': !isDeferred,
-        'due_amount': isDeferred ? totalPrice : 0.0,
-        'note': note,
-        'payment_method': cart.paymentMethod,
-        'source': 'pos_cart',
-        'created_at': FieldValue.serverTimestamp(),
-      });
+      if (isSingleLine) {
+        final line = singleLine!;
+        final unitPriceOut = isComplimentary ? 0.0 : line.unitPrice;
+        final totalPriceOut = isComplimentary ? 0.0 : line.lineTotalPrice;
+        final customTitle = line.type == 'custom_blend'
+            ? (line.meta['custom_title'] ?? line.variant ?? line.name)
+                .toString()
+                .trim()
+            : '';
+        final customComponents =
+            line.type == 'custom_blend' ? line.meta['components'] : null;
+
+        final data = <String, dynamic>{
+          'type': line.type,
+          'source': 'pos_cart',
+          'name': line.name,
+          'variant': line.variant,
+          'unit': line.unit,
+          'quantity': line.quantity,
+          'grams': line.grams,
+          'unit_price': unitPriceOut,
+          'unit_cost': line.unitCost,
+          'total_price': totalPriceOut,
+          'total_cost': line.lineTotalCost,
+          'profit_total': profit,
+          'is_complimentary': isComplimentary,
+          'is_deferred': isDeferred,
+          'paid': !isDeferred,
+          'due_amount': isDeferred ? totalPriceOut : 0.0,
+          'note': note,
+          'payment_method': cart.paymentMethod,
+          'meta': line.meta,
+          'created_at': FieldValue.serverTimestamp(),
+        };
+
+        if (line.type == 'drink') {
+          data['drink_id'] = line.productId;
+          data['drink_name'] = line.name;
+        } else if (line.type == 'single') {
+          data['single_id'] = line.productId;
+          data['single_name'] = line.name;
+        } else if (line.type == 'ready_blend') {
+          data['blend_id'] = line.productId;
+          data['blend_name'] = line.name;
+        } else if (line.type == 'extra') {
+          data['extra_id'] = line.productId;
+          data['extra_name'] = line.name;
+        } else if (line.type == 'custom_blend') {
+          if (customTitle.isNotEmpty) {
+            data['custom_title'] = customTitle;
+          }
+          if (customComponents is List) {
+            data['components'] = customComponents;
+          }
+        }
+
+        tx.set(saleRef, data);
+        if (line.type == 'custom_blend' && customTitle.isNotEmpty) {
+          final blendRef = db.collection('custom_blends').doc();
+          tx.set(blendRef, {
+            'title': customTitle,
+            'created_at': FieldValue.serverTimestamp(),
+            'components': customComponents is List ? customComponents : const [],
+            'total_grams': line.grams,
+            'total_price': totalPriceOut,
+            'spiced': line.meta['spiced'] == true,
+            'ginseng_grams': _asInt(line.meta['ginseng_grams']),
+            'is_complimentary': isComplimentary,
+            'is_deferred': isDeferred,
+            'sale_id': saleRef.id,
+            'source': 'pos_cart',
+          });
+        }
+      } else {
+        final counterRef = db.collection('counters').doc('invoice_counter');
+        final counterSnap = await tx.get(counterRef);
+        final counterData = counterSnap.data();
+        final currentNumber = counterData == null
+            ? 0
+            : _asInt(counterData['last_invoice_number']);
+        final nextNumber = currentNumber + 1;
+
+        tx.set(
+          counterRef,
+          {'last_invoice_number': nextNumber},
+          SetOptions(merge: true),
+        );
+
+        final items = cart.lines.map((l) {
+          final map = l.toMap();
+          final lineComplimentary =
+              isComplimentary || (map['is_complimentary'] == true);
+          if (lineComplimentary) {
+            map['unit_price'] = 0.0;
+            map['line_total_price'] = 0.0;
+            map['is_complimentary'] = true;
+          }
+          return map;
+        }).toList();
+
+        tx.set(saleRef, {
+          'type': 'invoice',
+          'invoice_number': nextNumber,
+          'items': items,
+          'total_price': totalPrice,
+          'total_cost': totalCost,
+          'profit_total': profit,
+          'is_complimentary': isComplimentary,
+          'is_deferred': isDeferred,
+          'paid': !isDeferred,
+          'due_amount': isDeferred ? totalPrice : 0.0,
+          'note': note,
+          'payment_method': cart.paymentMethod,
+          'source': 'pos_cart',
+          'created_at': FieldValue.serverTimestamp(),
+        });
+
+        for (final line in cart.lines) {
+          if (line.type != 'custom_blend') continue;
+          final title =
+              (line.meta['custom_title'] ?? line.variant ?? line.name)
+                  .toString()
+                  .trim();
+          if (title.isEmpty) continue;
+          final lineComplimentary =
+              isComplimentary || line.isComplimentary;
+          final totalPriceOut =
+              lineComplimentary ? 0.0 : line.lineTotalPrice;
+          final comps = line.meta['components'];
+
+          final blendRef = db.collection('custom_blends').doc();
+          tx.set(blendRef, {
+            'title': title,
+            'created_at': FieldValue.serverTimestamp(),
+            'components': comps is List ? comps : const [],
+            'total_grams': line.grams,
+            'total_price': totalPriceOut,
+            'spiced': line.meta['spiced'] == true,
+            'ginseng_grams': _asInt(line.meta['ginseng_grams']),
+            'is_complimentary': lineComplimentary,
+            'is_deferred': isDeferred,
+            'invoice_id': saleRef.id,
+            'invoice_number': nextNumber,
+            'source': 'pos_cart',
+          });
+        }
+      }
     });
 
-    return invoiceRef.id;
+    return saleRef.id;
   }
 }

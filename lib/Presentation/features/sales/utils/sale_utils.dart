@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
 
 import '../models/sale_component.dart';
@@ -20,6 +21,13 @@ DateTimeRange defaultSalesRange() {
 double parseDouble(dynamic value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '0') ?? 0;
+}
+
+int? parseOptionalInt(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString());
 }
 
 DateTime parseDate(dynamic value) {
@@ -178,7 +186,8 @@ List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
 
   // 4) الأنواع المنفردة
   if (type == 'drink') {
-    final name = (data['drink_name'] ?? data['name'] ?? 'مشروب').toString();
+    final name =
+        (data['drink_name'] ?? data['name'] ?? AppStrings.labelDrink).toString();
     final variant = (data['roast'] ?? data['variant'] ?? '').toString();
     final quantity = parseDouble(data['quantity'] ?? data['qty'] ?? 1);
     final unit = (data['unit'] ?? 'cup').toString();
@@ -219,7 +228,8 @@ List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
   }
 
   if (type == 'extra') {
-    final name = (data['extra_name'] ?? data['name'] ?? 'سناكس').toString();
+    final name =
+        (data['extra_name'] ?? data['name'] ?? AppStrings.labelExtra).toString();
     final variant = (data['variant'] ?? '').toString();
     final quantity = parseDouble(data['quantity'] ?? data['qty'] ?? 1);
     final unit = (data['unit'] ?? 'piece').toString();
@@ -245,7 +255,7 @@ List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
 
 String normalizeUnit(String unit) {
   if (unit.trim().toLowerCase() == 'piece') {
-    return 'قطعة';
+    return AppStrings.labelPieceUnit;
   }
   return unit;
 }
@@ -261,33 +271,38 @@ String buildTitleLine(Map<String, dynamic> data, String type) {
       final drinkName = (data['drink_name'] ?? '').toString();
       final finalName = labelNV.isNotEmpty
           ? labelNV
-          : (drinkName.isNotEmpty ? drinkName : 'مشروب');
-      return 'مشروب - $quantity $finalName';
+          : (drinkName.isNotEmpty ? drinkName : AppStrings.labelDrink);
+      return AppStrings.saleTitleDrink(quantity, finalName);
     case 'invoice':
+      final invoiceNumber = parseOptionalInt(data['invoice_number']);
+      if (invoiceNumber != null && invoiceNumber > 0) {
+        return AppStrings.saleTitleInvoiceNumber(invoiceNumber);
+      }
       final items = _asListMap(data['items']);
       final count = items.length;
       final amount = parseDouble(data['total_price']).toStringAsFixed(2);
-      return 'فاتورة - $count بند - $amount';
+      return AppStrings.saleTitleInvoice(count, amount);
     case 'single':
       final grams = parseDouble(data['grams']).toStringAsFixed(0);
       final lbl = labelNV.isNotEmpty ? labelNV : name;
-      return 'صنف منفرد - $grams جم ${lbl.isNotEmpty ? lbl : ''}'.trim();
+      return AppStrings.saleTitleSingle(grams, lbl);
     case 'ready_blend':
       final grams = parseDouble(data['grams']).toStringAsFixed(0);
       final lbl = labelNV.isNotEmpty ? labelNV : name;
-      return 'توليفة جاهزة - $grams جم ${lbl.isNotEmpty ? lbl : ''}'.trim();
+      return AppStrings.saleTitleReadyBlend(grams, lbl);
     case 'custom_blend':
-      return 'توليفة العميل';
+      return AppStrings.saleTitleCustomBlend();
     case 'extra':
       final quantity = parseDouble(
         data['quantity'] ?? data['qty'] ?? 1,
       ).toStringAsFixed(0);
-      final extraName = (data['extra_name'] ?? data['name'] ?? 'سناكس')
-          .toString();
+      final extraName =
+          (data['extra_name'] ?? data['name'] ?? AppStrings.labelExtra)
+              .toString();
       final unit = normalizeUnit((data['unit'] ?? 'piece').toString());
-      return 'سناكس - $quantity $unit $extraName';
+      return AppStrings.saleTitleExtra(quantity, unit, extraName);
     default:
-      return 'عملية';
+      return AppStrings.labelOperation;
   }
 }
 

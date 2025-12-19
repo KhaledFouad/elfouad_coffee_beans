@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 
 import '../models/sales_day_group.dart';
 import 'sale_tile.dart';
@@ -79,7 +80,7 @@ class _SummaryPill extends StatelessWidget {
             )
           else
             Text(
-              'مبيعات: ${value.toStringAsFixed(2)}',
+              AppStrings.salesAmount(value),
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
         ],

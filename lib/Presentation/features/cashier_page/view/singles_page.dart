@@ -2,13 +2,26 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/single_dialog.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_breakpoints.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'package:responsive_framework/responsive_framework.dart';
 
 class SinglesPage extends StatelessWidget {
   const SinglesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final titleSize =
+        ResponsiveValue<double>(
+          context,
+          defaultValue: 22,
+          conditionalValues: const [
+            Condition.smallerThan(name: TABLET, value: 20),
+            Condition.largerThan(name: DESKTOP, value: 26),
+          ],
+        ).value;
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(64),
@@ -24,13 +37,13 @@ class SinglesPage extends StatelessWidget {
                 color: Colors.white,
               ),
               onPressed: () => Navigator.maybePop(context),
-              tooltip: 'رجوع',
+              tooltip: AppStrings.tooltipBack,
             ),
-            title: const Text(
-              'أصناف منفردة',
+            title: Text(
+              AppStrings.titleSinglesSection,
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 22,
+                fontSize: titleSize,
                 color: Colors.white,
               ),
             ),
@@ -61,10 +74,10 @@ class SinglesPage extends StatelessWidget {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) showErrorDialog(context, e, snap.stackTrace);
             });
-            return const Center(child: Text('حدث خطأ أثناء تحميل الأصناف'));
+            return const Center(child: Text(AppStrings.errorLoadingSingles));
           }
           if (!snap.hasData || snap.data!.docs.isEmpty) {
-            return const Center(child: Text('لا يوجد أصناف منفردة'));
+            return const Center(child: Text(AppStrings.emptySinglesShort));
           }
 
           // === تجميع حسب الاسم (بدون تكرار) ===
@@ -108,16 +121,10 @@ class SinglesPage extends StatelessWidget {
           return LayoutBuilder(
             builder: (context, c) {
               final max = c.maxWidth;
-              final cross = max >= 1200
-                  ? 4
-                  : max >= 900
-                  ? 3
-                  : max >= 600
-                  ? 2
-                  : 1;
+              final cross = AppBreakpoints.gridCount(max);
 
               return GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                padding: AppBreakpoints.gridPagePadding(max),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: cross,
                   mainAxisSpacing: 16,
@@ -166,6 +173,16 @@ class _SingleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleSize =
+        ResponsiveValue<double>(
+          context,
+          defaultValue: 35,
+          conditionalValues: const [
+            Condition.smallerThan(name: TABLET, value: 24),
+            Condition.between(start: AppBreakpoints.tabletStart, end: AppBreakpoints.tabletEnd, value: 30),
+          ],
+        ).value;
+
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(18),
@@ -204,9 +221,9 @@ class _SingleCard extends StatelessWidget {
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 35,
+                    fontSize: titleSize,
                     fontWeight: FontWeight.w800,
                     height: 1.2,
                     shadows: [
@@ -226,3 +243,5 @@ class _SingleCard extends StatelessWidget {
     );
   }
 }
+
+

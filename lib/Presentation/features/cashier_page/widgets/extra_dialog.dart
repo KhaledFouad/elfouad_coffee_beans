@@ -1,7 +1,10 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'dialogs/dialog_image_header.dart';
 
 class ExtraDialog extends StatefulWidget {
   final String extraId;
@@ -23,17 +26,19 @@ class ExtraDialog extends StatefulWidget {
 }
 
 class _ExtraDialogState extends State<ExtraDialog> {
-  static const _currencyLabel = 'ج';
-  static const _unitLabel = 'قطعة';
-  static const _priceLabel = 'سعر القطعة';
-  static const _stockLabel = 'المخزون';
-  static const _totalLabel = 'الإجمالي';
-  static const _cancelLabel = 'إلغاء';
-  static const _confirmLabel = 'تأكيد';
+  static final _currencyLabel = AppStrings.currencyEgpLetter;
+  static const _unitLabel = AppStrings.labelPieceUnit;
+  static const _priceLabel = AppStrings.labelUnitPricePiece;
+  static const _stockLabel = AppStrings.labelStock;
+  static const _totalLabel = AppStrings.labelInvoiceTotal;
+  static const _cancelLabel = AppStrings.dialogCancel;
+  static const _confirmLabel = AppStrings.dialogConfirm;
 
   bool _busy = false;
   String? _fatal;
   int _qty = 1;
+  bool _isComplimentary = false;
+  bool get _canQuickConfirm => widget.cartMode || widget.onAddToCart != null;
 
   // ---------- safe getters ----------
   String get _name => (widget.extraData['name'] ?? '').toString();
@@ -54,15 +59,16 @@ class _ExtraDialogState extends State<ExtraDialog> {
   double get _unitCost => _numOf(widget.extraData['cost_unit']);
   int get _stock => _intOf(widget.extraData['stock_units']);
 
-  double get _totalPrice => _unitPrice * _qty;
+  double get _displayUnitPrice => _isComplimentary ? 0.0 : _unitPrice;
+  double get _totalPrice => _isComplimentary ? 0.0 : _unitPrice * _qty;
   double get _totalCost => _unitCost * _qty;
 
   CartLine _buildCartLine() {
     if (_name.isEmpty) {
-      throw Exception('اسم الصنف غير موجود.');
+      throw Exception(AppStrings.errorItemNameMissing);
     }
     if (_qty <= 0) {
-      throw Exception('الكمية غير صالحة.');
+      throw Exception(AppStrings.errorInvalidQuantity);
     }
 
     final variantRaw = (widget.extraData['variant'] as String?)?.trim() ?? '';
@@ -78,11 +84,11 @@ class _ExtraDialogState extends State<ExtraDialog> {
       image: _image,
       quantity: _qty.toDouble(),
       grams: 0,
-      unitPrice: _unitPrice,
+      unitPrice: _displayUnitPrice,
       unitCost: _unitCost,
       lineTotalPrice: _totalPrice,
       lineTotalCost: _totalCost,
-      isComplimentary: false,
+      isComplimentary: _isComplimentary,
       isDeferred: false,
       note: '',
       meta: {'variant': variant},
@@ -100,12 +106,12 @@ class _ExtraDialogState extends State<ExtraDialog> {
 
   Future<void> _commitSale() async {
     if (_name.isEmpty) {
-      setState(() => _fatal = 'Ø§Ø³Ù… Ø§Ù„ØµÙ†Ù ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.');
+      setState(() => _fatal = AppStrings.errorItemNameMissing);
       await showErrorDialog(context, _fatal!);
       return;
     }
     if (_qty <= 0) {
-      setState(() => _fatal = 'Ø§Ù„ÙƒÙ…ÙŠØ© ØºÙŠØ± ØµØ§Ù„Ø­Ø©.');
+      setState(() => _fatal = AppStrings.errorInvalidQuantity);
       await showErrorDialog(context, _fatal!);
       return;
     }
@@ -140,7 +146,7 @@ class _ExtraDialogState extends State<ExtraDialog> {
       await db.runTransaction((tx) async {
         final snap = await tx.get(ref);
         if (!snap.exists) {
-          throw Exception('Ø§Ù„ØµÙ†Ù ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.');
+          throw Exception(AppStrings.errorItemNameMissing);
         }
         final data = snap.data() ?? {};
         final curStock = _intOf(data['stock_units']);
@@ -148,14 +154,13 @@ class _ExtraDialogState extends State<ExtraDialog> {
         final unitCost = _numOf(data['cost_unit']);
 
         if (curStock < _qty) {
-          throw Exception(
-            'Ø§Ù„Ù…Ø®Ø²ÙˆÙ† ØºÙŠØ± ÙƒØ§ÙÙ: Ø§Ù„Ù…ØªØ§Ø­ $curStock $_unitLabel',
-          );
+          throw Exception(AppStrings.stockNotEnough(curStock, _unitLabel));
         }
 
-        final totalPrice = unitPrice * _qty;
+        final displayUnitPrice = _isComplimentary ? 0.0 : unitPrice;
+        final totalPrice = _isComplimentary ? 0.0 : unitPrice * _qty;
         final totalCost = unitCost * _qty;
-        final profit = totalPrice - totalCost;
+        final profit = _isComplimentary ? 0.0 : totalPrice - totalCost;
 
         tx.update(ref, {
           'stock_units': curStock - _qty,
@@ -171,10 +176,11 @@ class _ExtraDialogState extends State<ExtraDialog> {
           'variant': (data['variant'] as String?)?.trim(),
           'unit': 'piece',
           'quantity': _qty,
-          'unit_price': unitPrice,
+          'unit_price': displayUnitPrice,
           'total_price': totalPrice,
           'total_cost': totalCost,
           'profit_total': profit,
+          'is_complimentary': _isComplimentary,
           'is_deferred': false,
           'paid': true,
           'payment_method': 'cash',
@@ -186,6 +192,34 @@ class _ExtraDialogState extends State<ExtraDialog> {
       final nav = Navigator.of(context, rootNavigator: true);
       nav.pop();
       nav.pushNamedAndRemoveUntil('/', (r) => false);
+    } catch (e, st) {
+      logError(e, st);
+      if (mounted) await showErrorDialog(context, e, st);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _commitInstantInvoice() async {
+    if (!_canQuickConfirm || _busy) return;
+    setState(() {
+      _busy = true;
+      _fatal = null;
+    });
+    try {
+      final line = _buildCartLine();
+      final tempCart = CartState();
+      tempCart.addLine(line);
+      if (line.isComplimentary) {
+        tempCart.setInvoiceComplimentary(true);
+      }
+      await CartCheckout.commitInvoice(cart: tempCart);
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      Navigator.pop(context, line);
+      messenger?.showSnackBar(
+        const SnackBar(content: Text(AppStrings.dialogInvoiceCreated)),
+      );
     } catch (e, st) {
       logError(e, st);
       if (mounted) await showErrorDialog(context, e, st);
@@ -232,47 +266,7 @@ class _ExtraDialogState extends State<ExtraDialog> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // ===== Header (Ù†ÙØ³ Ø³ØªØ§ÙŠÙ„ Ø§Ù„Ù…Ø´Ø±ÙˆØ¨Ø§Øª) =====
-                        ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(18),
-                          ),
-                          child: Stack(
-                            children: [
-                              Image.asset(
-                                _image,
-                                height: 140,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                              Container(
-                                height: 140,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.black.withValues(alpha: 0.15),
-                                      Colors.black.withValues(alpha: 0.55),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: Center(
-                                  child: Text(
-                                    _name,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 27,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        DialogImageHeader(image: _image, title: _name),
 
                         // ===== Body =====
                         Padding(
@@ -284,7 +278,7 @@ class _ExtraDialogState extends State<ExtraDialog> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    '$_priceLabel: ${_unitPrice.toStringAsFixed(2)} $_currencyLabel',
+                                    '$_priceLabel: ${_displayUnitPrice.toStringAsFixed(2)} $_currencyLabel',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -296,6 +290,15 @@ class _ExtraDialogState extends State<ExtraDialog> {
                                     ),
                                   ),
                                 ],
+                              ),
+                              const SizedBox(height: 12),
+                              ToggleCard(
+                                title: AppStrings.labelHospitality,
+                                value: _isComplimentary,
+                                busy: _busy,
+                                onChanged: (v) =>
+                                    setState(() => _isComplimentary = v),
+                                leadingIcon: Icons.card_giftcard,
                               ),
                               const SizedBox(height: 12),
                               Row(
@@ -430,6 +433,9 @@ class _ExtraDialogState extends State<ExtraDialog> {
                                     ),
                                   ),
                                   onPressed: _busy ? null : _commitSale,
+                                  onLongPress: _busy || !_canQuickConfirm
+                                      ? null
+                                      : _commitInstantInvoice,
                                   child: _busy
                                       ? const SizedBox(
                                           width: 18,

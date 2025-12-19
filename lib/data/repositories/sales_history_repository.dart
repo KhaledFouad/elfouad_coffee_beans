@@ -44,13 +44,24 @@ class SalesHistoryRepository {
 
     // أول صفحة: ضيف معاها الفواتير المؤجلة الغير مسددة
     if (startAfter == null) {
+      final settledSnap = await _firestore
+          .collection('sales')
+          .where(
+            'settled_at',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+          )
+          .where('settled_at', isLessThan: Timestamp.fromDate(range.end))
+          .where('paid', isEqualTo: true)
+          .orderBy('settled_at', descending: true)
+          .get();
+
       final deferredSnap = await _firestore
           .collection('sales')
           .where('is_deferred', isEqualTo: true)
           .where('paid', isEqualTo: false)
           .get();
 
-      if (deferredSnap.docs.isNotEmpty) {
+      if (deferredSnap.docs.isNotEmpty || settledSnap.docs.isNotEmpty) {
         final combined =
             <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
         for (final d in docs) {
@@ -59,8 +70,11 @@ class SalesHistoryRepository {
         for (final d in deferredSnap.docs) {
           combined[d.id] = d;
         }
+        for (final d in settledSnap.docs) {
+          combined[d.id] = d;
+        }
         docs = combined.values.toList()
-          ..sort((a, b) => _createdAtOf(b).compareTo(_createdAtOf(a)));
+          ..sort((a, b) => _effectiveAtOf(b).compareTo(_effectiveAtOf(a)));
       }
     }
 
@@ -74,7 +88,7 @@ class SalesHistoryRepository {
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchAllForRange({
     required DateTimeRange range,
   }) async {
-    final snap = await _firestore
+    final createdSnap = await _firestore
         .collection('sales')
         .where(
           'created_at',
@@ -84,7 +98,26 @@ class SalesHistoryRepository {
         .orderBy('created_at', descending: true)
         .get();
 
-    return snap.docs;
+    final settledSnap = await _firestore
+        .collection('sales')
+        .where(
+          'settled_at',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+        )
+        .where('settled_at', isLessThan: Timestamp.fromDate(range.end))
+        .where('paid', isEqualTo: true)
+        .orderBy('settled_at', descending: true)
+        .get();
+
+    final combined = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final d in createdSnap.docs) {
+      combined[d.id] = d;
+    }
+    for (final d in settledSnap.docs) {
+      combined[d.id] = d;
+    }
+
+    return combined.values.toList();
   }
 
   Future<void> settleDeferredSale(String saleId) async {
@@ -164,5 +197,36 @@ class SalesHistoryRepository {
       return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
     }
     return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  DateTime _settledAtOf(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    final value = data['settled_at'];
+
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(
+        value.toInt(),
+        isUtc: true,
+      ).toLocal();
+    }
+    if (value is String) {
+      return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  DateTime _effectiveAtOf(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    final paid = data['paid'] == true;
+    if (paid && data['settled_at'] != null) {
+      return _settledAtOf(doc);
+    }
+    return _createdAtOf(doc);
   }
 }

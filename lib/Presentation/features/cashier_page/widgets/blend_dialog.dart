@@ -6,7 +6,10 @@ import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmode
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'dialogs/dialog_action_row.dart';
+import 'dialogs/dialog_image_header.dart';
 
 class UserFriendly implements Exception {
   final String message;
@@ -40,6 +43,7 @@ class BlendDialog extends StatefulWidget {
 class _BlendDialogState extends State<BlendDialog> {
   bool _busy = false;
   String? _fatal;
+  bool get _canQuickConfirm => widget.cartMode || widget.onAddToCart != null;
 
   late final List<String> _variantOptions;
   String? _variant;
@@ -52,6 +56,7 @@ class _BlendDialogState extends State<BlendDialog> {
   _PadTarget _padTarget = _PadTarget.none;
 
   // حالات
+  bool _isComplimentary = false;
   bool _isSpiced = false; // محوّج
 
   // جينسنج (يظهر فقط لو canSpice)
@@ -202,7 +207,8 @@ class _BlendDialogState extends State<BlendDialog> {
   double get _pricePerG =>
       _sellPerG + (_isSpiced && _canSpice ? _spicePricePerG : 0.0);
 
-  double get _totalPrice => _beansAmount + _spiceAmount + _ginsengPriceAmount;
+  double get _totalPrice =>
+      _isComplimentary ? 0.0 : _beansAmount + _spiceAmount + _ginsengPriceAmount;
 
   double get _totalCost =>
       _beansCostAmount + _spiceCostAmount + _ginsengCostAmount;
@@ -328,7 +334,7 @@ class _BlendDialogState extends State<BlendDialog> {
                   ),
                   onPressed: _busy ? null : () => _applyPadKey('done'),
                   child: const Text(
-                    'تم',
+                    AppStrings.btnDone,
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -353,7 +359,7 @@ class _BlendDialogState extends State<BlendDialog> {
       child: Row(
         children: [
           const Text(
-            'جينسنج',
+            AppStrings.labelGinseng,
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           ),
           const Spacer(),
@@ -372,7 +378,7 @@ class _BlendDialogState extends State<BlendDialog> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(
-              '$_ginsengGrams جم',
+              '$_ginsengGrams ${AppStrings.labelGramsShort}',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
@@ -393,14 +399,14 @@ class _BlendDialogState extends State<BlendDialog> {
   CartLine _buildCartLine() {
     final sel = _selected;
     if (sel == null) {
-      throw UserFriendly('لم يتم تحديد الصنف/التحميص.');
+      throw UserFriendly(AppStrings.errorSelectRoast);
     }
     final grams = _gramsEffective;
     if (grams <= 0) {
       throw UserFriendly(
         _mode == InputMode.grams
-            ? 'من فضلك أدخل كمية صحيحة بالجرام.'
-            : 'من فضلك أدخل سعرًا صحيحًا.',
+            ? AppStrings.errorEnterValidGrams
+            : AppStrings.errorEnterValidPrice,
       );
     }
 
@@ -443,7 +449,7 @@ class _BlendDialogState extends State<BlendDialog> {
       unitCost: gramsDouble > 0 ? (cost / gramsDouble) : 0.0,
       lineTotalPrice: price,
       lineTotalCost: cost,
-      isComplimentary: false,
+      isComplimentary: _isComplimentary,
       isDeferred: false,
       note: '',
       meta: meta,
@@ -454,7 +460,7 @@ class _BlendDialogState extends State<BlendDialog> {
   Future<void> _commitSale() async {
     final sel = _selected;
     if (sel == null) {
-      setState(() => _fatal = 'لم يتم تحديد الصنف/التحميص.');
+      setState(() => _fatal = AppStrings.errorSelectRoast);
       await showErrorDialog(context, _fatal!);
       return;
     }
@@ -462,8 +468,8 @@ class _BlendDialogState extends State<BlendDialog> {
     if (gramsToSell <= 0) {
       setState(
         () => _fatal = _mode == InputMode.grams
-            ? 'من فضلك أدخل كمية صحيحة بالجرام.'
-            : 'من فضلك أدخل سعرًا صحيحًا.',
+            ? AppStrings.errorEnterValidGrams
+            : AppStrings.errorEnterValidPrice,
       );
       await showErrorDialog(context, _fatal!);
       return;
@@ -481,11 +487,39 @@ class _BlendDialogState extends State<BlendDialog> {
       if (!mounted) return;
       Navigator.pop(context, line);
     } catch (e) {
-      final msg = e is UserFriendly ? e.message : 'حدث خطأ غير متوقع.';
+      final msg = e is UserFriendly ? e.message : AppStrings.errorUnexpected;
       if (mounted) {
         setState(() => _fatal = msg);
         await showErrorDialog(context, msg);
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _commitInstantInvoice() async {
+    if (!_canQuickConfirm || _busy) return;
+    setState(() {
+      _busy = true;
+      _fatal = null;
+    });
+    try {
+      final line = _buildCartLine();
+      final tempCart = CartState();
+      tempCart.addLine(line);
+      if (line.isComplimentary) {
+        tempCart.setInvoiceComplimentary(true);
+      }
+      await CartCheckout.commitInvoice(cart: tempCart);
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      Navigator.pop(context, line);
+      messenger?.showSnackBar(
+        const SnackBar(content: Text(AppStrings.dialogInvoiceCreated)),
+      );
+    } catch (e, st) {
+      logError(e, st);
+      if (mounted) await showErrorDialog(context, e, st);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -528,47 +562,7 @@ class _BlendDialogState extends State<BlendDialog> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Header
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(18),
-                      ),
-                      child: Stack(
-                        children: [
-                          Image.asset(
-                            image,
-                            height: 140,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
-                          Container(
-                            height: 140,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 0.15),
-                                  Colors.black.withValues(alpha: 0.55),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Positioned.fill(
-                            child: Center(
-                              child: Text(
-                                name,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 27,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    DialogImageHeader(image: image, title: name),
 
                     // Body
                     Padding(
@@ -586,7 +580,9 @@ class _BlendDialogState extends State<BlendDialog> {
                                   final v = widget.group.variants[r];
                                   final stock = v?.stock ?? double.infinity;
                                   final disabled = stock <= 0;
-                                  final label = disabled ? '$r (غير متاح)' : r;
+                                  final label = disabled
+                                      ? '$r (${AppStrings.labelUnavailable})'
+                                      : r;
                                   return ChoiceChip(
                                     label: Row(
                                       mainAxisSize: MainAxisSize.min,
@@ -643,11 +639,23 @@ class _BlendDialogState extends State<BlendDialog> {
                           // === محوّج (صف واحد) ===
                           Row(
                             children: [
+                              Expanded(
+                                child: ToggleCard(
+                                  title: AppStrings.labelHospitality,
+                                  value: _isComplimentary,
+                                  busy: _busy,
+                                  onChanged: (v) =>
+                                      setState(() => _isComplimentary = v),
+                                  leadingIcon: Icons.card_giftcard,
+                                ),
+                              ),
                               if (_canSpice) ...[
+                                const SizedBox(width: 8),
                                 Expanded(
                                   child: ToggleCard(
-                                    title: 'محوّج',
+                                    title: AppStrings.labelSpiced,
                                     value: _isSpiced,
+                                    busy: _busy,
                                     onChanged: (v) =>
                                         setState(() => _isSpiced = v),
                                   ),
@@ -668,12 +676,12 @@ class _BlendDialogState extends State<BlendDialog> {
                               segments: const [
                                 ButtonSegment(
                                   value: InputMode.grams,
-                                  label: Text('إدخال بالجرامات'),
+                                  label: Text(AppStrings.labelInputByGrams),
                                   icon: Icon(Icons.scale),
                                 ),
                                 ButtonSegment(
                                   value: InputMode.price,
-                                  label: Text('إدخال بالسعر'),
+                                  label: Text(AppStrings.labelInputByPrice),
                                   icon: Icon(Icons.attach_money),
                                 ),
                               ],
@@ -703,7 +711,7 @@ class _BlendDialogState extends State<BlendDialog> {
                               alignment: Alignment.centerRight,
                               child: Row(
                                 children: [
-                                  const Text('الكمية (جم)'),
+                                  const Text(AppStrings.labelQuantityGrams),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: TextFormField(
@@ -714,7 +722,7 @@ class _BlendDialogState extends State<BlendDialog> {
                                           ? null
                                           : () => _openPad(_PadTarget.grams),
                                       decoration: const InputDecoration(
-                                        hintText: 'مثال: 250',
+                                        hintText: AppStrings.hintExample250,
                                         isDense: true,
                                         contentPadding: EdgeInsets.symmetric(
                                           vertical: 12,
@@ -732,7 +740,7 @@ class _BlendDialogState extends State<BlendDialog> {
                               alignment: Alignment.centerRight,
                               child: Row(
                                 children: [
-                                  const Text('المبلغ (جم)'),
+                                  const Text(AppStrings.labelAmountLep),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: TextFormField(
@@ -743,7 +751,7 @@ class _BlendDialogState extends State<BlendDialog> {
                                           ? null
                                           : () => _openPad(_PadTarget.price),
                                       decoration: const InputDecoration(
-                                        hintText: 'مثال: 120.00',
+                                        hintText: AppStrings.hintExample120,
                                         isDense: true,
                                         contentPadding: EdgeInsets.symmetric(
                                           vertical: 12,
@@ -759,10 +767,12 @@ class _BlendDialogState extends State<BlendDialog> {
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Text('الجرامات المحسوبة'),
+                                const Text(AppStrings.labelCalculatedGrams),
                                 const Spacer(),
                                 Text(
-                                  '${_gramsEffective.toString()} جم',
+                                  AppStrings.calculatedGramsLine(
+                                    _gramsEffective,
+                                  ),
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
@@ -773,8 +783,16 @@ class _BlendDialogState extends State<BlendDialog> {
                           ],
 
                           const SizedBox(height: 12),
-                          _KVRow(k: 'سعر/كجم', v: _sellPerKg, suffix: 'جم'),
-                          _KVRow(k: 'سعر/جرام', v: _pricePerG, suffix: 'جم'),
+                          _KVRow(
+                            k: AppStrings.labelPricePerKg,
+                            v: _sellPerKg,
+                            suffix: AppStrings.labelGramsShort,
+                          ),
+                          _KVRow(
+                            k: AppStrings.labelPricePerGram,
+                            v: _pricePerG,
+                            suffix: AppStrings.labelGramsShort,
+                          ),
                           const SizedBox(height: 8),
 
                           // الإجمالي
@@ -792,7 +810,7 @@ class _BlendDialogState extends State<BlendDialog> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
-                                  'الإجمالي',
+                                  AppStrings.labelInvoiceTotal,
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 16,
@@ -831,50 +849,12 @@ class _BlendDialogState extends State<BlendDialog> {
                     const Divider(height: 1),
                     Padding(
                       padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () => Navigator.pop(context),
-                              child: const Text(
-                                'إلغاء',
-                                style: TextStyle(
-                                  color: Color(0xFF543824),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton(
-                              style: ButtonStyle(
-                                backgroundColor: WidgetStateProperty.all(
-                                  const Color(0xFF543824),
-                                ),
-                              ),
-                              onPressed: _busy ? null : _commitSale,
-                              child: _busy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'تأكيد',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
+                      child: DialogActionRow(
+                        busy: _busy,
+                        onCancel: () => Navigator.pop(context),
+                        onConfirm: _commitSale,
+                        onConfirmLongPress:
+                            _canQuickConfirm ? _commitInstantInvoice : null,
                       ),
                     ),
                   ],

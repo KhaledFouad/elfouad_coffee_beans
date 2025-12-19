@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import '../models/sale_component.dart';
 import '../models/sale_record.dart';
-import '../viewmodels/sales_history_view_model.dart';
+import '../bloc/sales_history_cubit.dart';
 import '../utils/sale_utils.dart';
 
 class SaleTile extends StatelessWidget {
@@ -42,11 +43,13 @@ class SaleTile extends StatelessWidget {
         spacing: 10,
         runSpacing: 4,
         crossAxisAlignment: WrapCrossAlignment.center,
-        children: [_KeyValue(label: 'الإجمالي', value: record.totalPrice)],
+        children: [
+          _KeyValue(label: AppStrings.labelInvoiceTotal, value: record.totalPrice)
+        ],
       ),
       children: [
         if (record.components.isEmpty)
-          const ListTile(title: Text('— لا توجد تفاصيل مكونات —'))
+          const ListTile(title: Text(AppStrings.toastNoBlendComponents))
         else
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -68,7 +71,7 @@ class SaleTile extends StatelessWidget {
                 const Icon(Icons.history, size: 16, color: Colors.brown),
                 const SizedBox(width: 6),
                 Text(
-                  'التاريخ الأصلي: ${record.originalDateTimeLabel}',
+                  AppStrings.originalDateLabel(record.originalDateTimeLabel),
                   style: const TextStyle(
                     fontSize: 12,
                     color: Colors.black54,
@@ -117,38 +120,60 @@ class _TitleRow extends StatelessWidget {
     final textStyle = const TextStyle(fontWeight: FontWeight.w700);
     final timeStyle = const TextStyle(fontSize: 12, color: Colors.black54);
 
-    return Row(
+    final badges = Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(
-          child: Text(
-            record.titleLine,
-            style: textStyle,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (record.isComplimentary) ...[
-          const SizedBox(width: 6),
+        if (record.isComplimentary)
           _Chip(
-            label: 'ضيافة',
+            label: AppStrings.labelHospitality,
             border: Colors.orange.shade200,
             fill: Colors.orange.shade50,
           ),
-        ],
-        if (record.isDeferred && !record.isPaid) ...[
-          const SizedBox(width: 6),
-          DeferredBadge(note: record.note),
-        ],
-        if (record.isDeferred && record.isPaid) ...[
-          const SizedBox(width: 6),
+        if (record.isDeferred && !record.isPaid) DeferredBadge(note: record.note),
+        if (record.isDeferred && record.isPaid)
           _Chip(
-            label: 'مدفوع',
+            label: AppStrings.labelPaid,
             border: Colors.green.shade200,
             fill: Colors.green.shade50,
           ),
-        ],
-        const SizedBox(width: 6),
         Text(record.displayTime, style: timeStyle),
       ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                record.titleLine,
+                style: textStyle,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              badges,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(
+              child: Text(
+                record.titleLine,
+                style: textStyle,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 6),
+            badges,
+          ],
+        );
+      },
     );
   }
 }
@@ -176,7 +201,7 @@ class DeferredBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'أجل :   ',
+            AppStrings.labelDeferredShort,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -263,7 +288,7 @@ class _ComponentRow extends StatelessWidget {
             Text(quantity, style: const TextStyle(color: Colors.black54)),
           const SizedBox(width: 12),
           Text(
-            'س:${component.lineTotalPrice.toStringAsFixed(2)}',
+            AppStrings.priceLine(component.lineTotalPrice),
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
@@ -287,9 +312,9 @@ class _SettleButton extends StatelessWidget {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('تأكيد السداد'),
+            title: const Text(AppStrings.dialogConfirmPayment),
             content: Text(
-              'سيتم تثبيت دفع ${record.totalPrice.toStringAsFixed(2)} جم.\nهل تريد المتابعة؟',
+              AppStrings.confirmSettleAmount(record.totalPrice),
             ),
             actions: [
               TextButton(
@@ -302,7 +327,7 @@ class _SettleButton extends StatelessWidget {
                 ),
                 onPressed: () => Navigator.pop(context, false),
                 child: const Text(
-                  'إلغاء',
+                  AppStrings.dialogCancel,
                   style: TextStyle(color: Colors.brown),
                 ),
               ),
@@ -313,7 +338,7 @@ class _SettleButton extends StatelessWidget {
                   ),
                 ),
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('تأكيد'),
+                child: const Text(AppStrings.dialogConfirm),
               ),
             ],
           ),
@@ -321,21 +346,21 @@ class _SettleButton extends StatelessWidget {
 
         if (confirmed == true && context.mounted) {
           final messenger = ScaffoldMessenger.of(context);
-          final viewModel = context.read<SalesHistoryViewModel>();
+          final cubit = context.read<SalesHistoryCubit>();
           try {
-            await viewModel.settleDeferredSale(record.id);
+            await cubit.settleDeferredSale(record.id);
             messenger.showSnackBar(
-              const SnackBar(content: Text('تم تسوية العملية المؤجّلة')),
+              const SnackBar(content: Text(AppStrings.dialogDeferredSettled)),
             );
           } catch (error) {
             messenger.showSnackBar(
-              SnackBar(content: Text('تعذر التسوية: $error')),
+              SnackBar(content: Text(AppStrings.deferredSettleFailed(error))),
             );
           }
         }
       },
       icon: const Icon(Icons.payments),
-      label: const Text('تم الدفع'),
+      label: const Text(AppStrings.dialogPaymentDone),
     );
   }
 }
@@ -356,4 +381,3 @@ IconData _iconForType(String type) {
       return Icons.receipt_long;
   }
 }
-

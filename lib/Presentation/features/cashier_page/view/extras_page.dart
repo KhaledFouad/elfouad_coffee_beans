@@ -1,17 +1,29 @@
-﻿// extras_page.dart
+// extras_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/extra_dialog.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_breakpoints.dart';
 import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'package:responsive_framework/responsive_framework.dart';
 
 class ExtrasPage extends StatelessWidget {
   const ExtrasPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final titleSize =
+        ResponsiveValue<double>(
+          context,
+          defaultValue: 35,
+          conditionalValues: const [
+            Condition.smallerThan(name: TABLET, value: 24),
+            Condition.between(start: AppBreakpoints.tabletStart, end: AppBreakpoints.tabletEnd, value: 30),
+          ],
+        ).value;
+
     return Scaffold(
-      // ===== AppBar Ø¨Ù†ÙØ³ Ø³ØªØ§ÙŠÙ„ DrinksPage =====
+      // ===== AppBar بنفس ستايل DrinksPage =====
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(64),
         child: ClipRRect(
@@ -28,11 +40,11 @@ class ExtrasPage extends StatelessWidget {
               onPressed: () => Navigator.maybePop(context),
               tooltip: AppStrings.tooltipBack,
             ),
-            title: const Text(
+            title: Text(
               AppStrings.titleCookiesSection,
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 35,
+                fontSize: titleSize,
                 color: Colors.white,
               ),
             ),
@@ -53,7 +65,7 @@ class ExtrasPage extends StatelessWidget {
       ),
 
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        // Ø¨Ù†Ø¬ÙŠØ¨ Ø¹Ù†Ø§ØµØ± biscuits ÙÙ‚Ø· (Ø­Ø³Ø¨ Ø§Ù„Ù€ seed Ø§Ù„Ù„ÙŠ Ø¨Ø¹ØªÙ‡)
+        // بنجيب عناصر biscuits فقط (حسب الـ seed اللي بعته)
         stream: FirebaseFirestore.instance
             .collection('extras')
             .where('category', isEqualTo: 'biscuits')
@@ -104,15 +116,15 @@ class ExtrasPage extends StatelessWidget {
               );
             }).toList();
 
-            // === ØªØ±ØªÙŠØ¨ Ù…Ø®ØµØµ: Ø­Ø³Ø¨ Ø£ØµÙ†Ø§ÙÙƒØŒ Ø«Ù… Ø£Ø¨Ø¬Ø¯ÙŠÙ‹Ø§ ===
+            // === ترتيب مخصص: حسب أصنافك، ثم أبجديًا ===
             const preferredOrderExtras = <String>[
-              'ØªÙ…Ø± Ø¯Ø§Ø±Ùƒ Ø´ÙˆÙƒÙ„Øª',
-              'ØªÙ…Ø± ÙˆØ§ÙŠØª Ø´ÙˆÙƒÙ„Øª',
-              'Ù…Ø¹Ù…ÙˆÙ„ Ø³Ø§Ø¯Ø©',
-              'Ù…Ø¹Ù…ÙˆÙ„ ØªÙ…Ø±',
-              'Ù…Ø¹Ù…ÙˆÙ„ Ù‚Ø±ÙØ©',
-              'Ù…Ø¹Ù…ÙˆÙ„ ÙˆØ§ÙŠØª Ø´ÙˆÙƒÙ„Øª',
-              'Ù…Ø¹Ù…ÙˆÙ„ Ø¯Ø§Ø±Ùƒ Ø´ÙˆÙƒÙ„Øª',
+              'تمر دارك شوكلت',
+              'تمر وايت شوكلت',
+              'معمول سادة',
+              'معمول تمر',
+              'معمول قرفة',
+              'معمول وايت شوكلت',
+              'معمول دارك شوكلت',
             ];
             final rank = <String, int>{
               for (var i = 0; i < preferredOrderExtras.length; i++)
@@ -124,7 +136,7 @@ class ExtrasPage extends StatelessWidget {
               if (ra != rb) return ra.compareTo(rb);
               return a.name.compareTo(b.name);
             });
-            // === Ù†Ù‡Ø§ÙŠØ© Ø§Ù„ØªØ±ØªÙŠØ¨ ===
+            // === نهاية الترتيب ===
           } catch (e, st) {
             logError(e, st);
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -136,17 +148,11 @@ class ExtrasPage extends StatelessWidget {
           return LayoutBuilder(
             builder: (context, c) {
               final max = c.maxWidth;
-              final crossAxisCount = max >= 1200
-                  ? 4
-                  : max >= 900
-                  ? 3
-                  : max >= 600
-                  ? 2
-                  : 1;
+              final crossAxisCount = AppBreakpoints.gridCount(max);
               const spacing = 16.0;
 
               return GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                padding: AppBreakpoints.gridPagePadding(max),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   mainAxisSpacing: spacing,
@@ -160,14 +166,14 @@ class ExtrasPage extends StatelessWidget {
                     title: it.name,
                     image: it.image,
                     subtitle:
-                        AppStrings.extraPriceAndStock(it.priceSell, it.stockUnits),
+                        'سعر: ${it.priceSell.toStringAsFixed(2)} ج / قطعة • مخزون: ${it.stockUnits}',
                     onTap: () async {
                       try {
                         await showDialog(
                           context: context,
                           builder: (_) => ExtraDialog(
                             extraId: it.id,
-                            extraData: it.raw, // Ù†ÙØ³ Ø§Ù„Ù…Ø§Ø¨ Ø§Ù„Ù„ÙŠ Ù‚Ø±ÙŠØªÙ‡Ø§
+                            extraData: it.raw, // نفس الماب اللي قريتها
                           ),
                         );
                       } catch (e, st) {
@@ -223,6 +229,16 @@ class _ExtraCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleSize =
+        ResponsiveValue<double>(
+          context,
+          defaultValue: 30,
+          conditionalValues: const [
+            Condition.smallerThan(name: TABLET, value: 22),
+            Condition.between(start: AppBreakpoints.tabletStart, end: AppBreakpoints.tabletEnd, value: 26),
+          ],
+        ).value;
+
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(18),
@@ -238,7 +254,7 @@ class _ExtraCard extends StatelessWidget {
               errorBuilder: (_, __, ___) =>
                   Container(color: Colors.grey.shade300),
             ),
-            // Ø·Ø¨Ù‚Ø© ØªØºÙ…ÙŠÙ‚ Ø®ÙÙŠÙØ©
+            // طبقة تغميق خفيفة
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -251,7 +267,7 @@ class _ExtraCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Ø§Ù„Ø¹Ù†ÙˆØ§Ù† + Ø³Ø·Ø± Ù…Ø¹Ù„ÙˆÙ…Ø§Øª ØµØºÙŠØ±
+            // العنوان + سطر معلومات صغير
             Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -271,9 +287,9 @@ class _ExtraCard extends StatelessWidget {
                     Text(
                       title,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 30,
+                        fontSize: titleSize,
                         fontWeight: FontWeight.w800,
                         height: 1.2,
                         shadows: [
@@ -306,7 +322,7 @@ class _ExtraCard extends StatelessWidget {
   }
 }
 
-/// Dialog Ø¨Ø³ÙŠØ· Ù„Ø§Ø®ØªÙŠØ§Ø± ÙƒÙ…ÙŠØ© ÙˆØ¨ÙŠØ¹ Ø¨Ø§Ù„Ù‚Ø·Ø¹Ø©
+/// Dialog بسيط لاختيار كمية وبيع بالقطعة
 Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
   final ctrl = TextEditingController(text: '1');
   final ok = await showDialog<bool>(
@@ -317,7 +333,7 @@ Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '${AppStrings.labelUnitPricePiece} ${item.priceSell.toStringAsFixed(2)} ${AppStrings.currencyEgpLetter}',
+            '${AppStrings.labelUnitPricePiece} ${item.priceSell.toStringAsFixed(2)} ج',
           ),
           const SizedBox(height: 8),
           Text(AppStrings.stockPiecesAr(item.stockUnits)),
@@ -354,7 +370,7 @@ Future<void> _showSellDialog(BuildContext context, _ExtraItem item) async {
   if (!context.mounted) return;
 }
 
-/// Ø¨ÙŠØ¹ + Ø®ØµÙ… Ù…Ø®Ø²ÙˆÙ† + ØªØ³Ø¬ÙŠÙ„ ÙÙŠ sales (ØªØ±Ø§Ù†Ø²Ø§ÙƒØ´Ù†)
+/// بيع + خصم مخزون + تسجيل في sales (ترانزاكشن)
 Future<void> _sellExtraTransaction(
   BuildContext context,
   String extraId,
@@ -366,7 +382,7 @@ Future<void> _sellExtraTransaction(
   try {
     await db.runTransaction((tx) async {
       final snap = await tx.get(ref);
-      if (!snap.exists) throw AppStrings.errorProductNotFound;
+      if (!snap.exists) throw 'الصنف غير موجود';
       final data = snap.data() ?? {};
 
       double numValue(v) =>
@@ -382,23 +398,20 @@ Future<void> _sellExtraTransaction(
 
       if (qty <= 0) throw AppStrings.errorInvalidQuantity;
       if (stockUnits < qty) {
-        throw AppStrings.stockNotEnough(
-          stockUnits,
-          AppStrings.labelPieceUnit,
-        );
+        throw AppStrings.stockNotEnough(stockUnits, AppStrings.labelPieceUnit);
       }
 
       final totalPrice = priceSell * qty;
       final totalCost = costUnit * qty;
       final profit = totalPrice - totalCost;
 
-      // Ø®ØµÙ… Ø§Ù„Ù…Ø®Ø²ÙˆÙ†
+      // خصم المخزون
       tx.update(ref, {
         'stock_units': stockUnits - qty,
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      // Ø¥Ù†Ø´Ø§Ø¡ Ø¹Ù…Ù„ÙŠØ© Ø¨ÙŠØ¹ ÙÙŠ sales
+      // إنشاء عملية بيع في sales
       final saleRef = db.collection('sales').doc();
       tx.set(saleRef, {
         'type': 'extra',
@@ -420,10 +433,12 @@ Future<void> _sellExtraTransaction(
     });
   } catch (e, st) {
     logError(e, st);
-    // Ø¥Ø¸Ù‡Ø§Ø± Ø±Ø³Ø§Ù„Ø© Ù…ÙÙ‡ÙˆÙ…Ø© Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù…
+    // إظهار رسالة مفهومة للمستخدم
     if (context.mounted) {
       await showErrorDialog(context, e, st);
     }
     rethrow;
   }
 }
+
+

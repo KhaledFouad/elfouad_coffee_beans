@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 
 class CashierDataSource {
   final _firestore = FirebaseFirestore.instance;
@@ -9,12 +10,12 @@ class CashierDataSource {
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(docRef);
       if (!snapshot.exists) {
-        throw Exception("المنتج مش موجود");
+        throw Exception(AppStrings.errorProductNotFound);
       }
 
       final currentStock = snapshot['stock'] as int;
       if (currentStock < quantity) {
-        throw Exception("الكمية غير متاحة في المخزون");
+        throw Exception(AppStrings.errorQtyUnavailable);
       }
 
       // خصم الكمية

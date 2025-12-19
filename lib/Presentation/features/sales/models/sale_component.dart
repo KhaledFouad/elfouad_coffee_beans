@@ -1,3 +1,5 @@
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
+
 class SaleComponent {
   const SaleComponent({
     required this.name,
@@ -21,7 +23,7 @@ class SaleComponent {
 
   String quantityLabel(String Function(String value) translateUnit) {
     if (grams > 0) {
-      return '${grams.toStringAsFixed(0)} جم';
+      return '${grams.toStringAsFixed(0)} ${AppStrings.labelGramsUnit}';
     }
     if (quantity <= 0) {
       return '';

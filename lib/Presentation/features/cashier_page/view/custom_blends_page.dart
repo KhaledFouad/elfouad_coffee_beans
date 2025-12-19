@@ -1,9 +1,15 @@
-﻿// lib/Presentation/features/cashier_page/view/custom_blends_page.dart
+// lib/Presentation/features/cashier_page/view/custom_blends_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/deferred_note_field.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
+import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_breakpoints.dart';
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'package:responsive_framework/responsive_framework.dart';
+
+part 'custom_blends_widgets.dart';
 
 class UserFriendly implements Exception {
   final String message;
@@ -136,11 +142,17 @@ class _BlendLine {
 }
 
 class CustomBlendsPage extends StatefulWidget {
-  const CustomBlendsPage({super.key, this.cartMode = false, this.onAddToCart});
+  const CustomBlendsPage({
+    super.key,
+    this.cartMode = false,
+    this.onAddToCart,
+    this.initialBlend,
+  });
   static const String route = '/custom-blends';
 
   final bool cartMode;
   final ValueChanged<CartLine>? onAddToCart;
+  final Map<String, dynamic>? initialBlend;
 
   @override
   State<CustomBlendsPage> createState() => _CustomBlendsPageState();
@@ -151,10 +163,13 @@ enum _PadTargetType { none, lineGrams, linePrice }
 class _CustomBlendsPageState extends State<CustomBlendsPage> {
   bool _busy = false;
   String? _fatal;
+  bool get _canQuickConfirm => widget.cartMode || widget.onAddToCart != null;
 
   List<SingleVariantItem> _allItems = []; // Singles + Blends (محددة)
   final List<_BlendLine> _lines = [_BlendLine()];
   final TextEditingController _noteCtrl = TextEditingController();
+  final TextEditingController _titleCtrl = TextEditingController();
+  bool _templateApplied = false;
 
   bool _isComplimentary = false; // ضيافة
   bool _isDeferred = false; // أجِّل
@@ -383,7 +398,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                   ),
                   onPressed: _busy ? null : () => _applyPadKey('done'),
                   child: const Text(
-                    'تم',
+                    AppStrings.btnDone,
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -439,12 +454,108 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
         return a.fullLabel.compareTo(b.fullLabel);
       });
 
+      if (!mounted) return;
       setState(() {
         _allItems = all;
       });
+      _applyInitialBlendIfPossible();
     } catch (e) {
       setState(() => _fatal = 'تعذر تحميل الأصناف.');
     }
+  }
+
+  double _readDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  }
+
+  int _readInt(dynamic v) {
+    if (v is int) return v < 0 ? 0 : v;
+    if (v is num) return v.round().clamp(0, 1000000);
+    final parsed = int.tryParse(v?.toString() ?? '');
+    if (parsed == null) return 0;
+    return parsed < 0 ? 0 : parsed;
+  }
+
+  bool _readBool(dynamic v) => v == true;
+
+  SingleVariantItem? _findItem(String id, ItemSource source) {
+    for (final it in _allItems) {
+      if (it.id == id && it.source == source) return it;
+    }
+    return null;
+  }
+
+  bool _deriveSpicedFromComponents(dynamic components) {
+    if (components is! List) return false;
+    for (final raw in components) {
+      if (raw is! Map) continue;
+      final rate = _readDouble(raw['spice_rate_per_kg']);
+      final cost = _readDouble(raw['spice_cost_per_kg']);
+      if (rate > 0 || cost > 0) return true;
+    }
+    return false;
+  }
+
+  void _applyInitialBlendIfPossible() {
+    if (_templateApplied || widget.initialBlend == null || _allItems.isEmpty) {
+      return;
+    }
+    final data = widget.initialBlend!;
+    final components = data['components'];
+
+    final newLines = <_BlendLine>[];
+    if (components is List) {
+      for (final raw in components) {
+        if (raw is! Map) continue;
+        final id = (raw['item_id'] ?? '').toString();
+        if (id.isEmpty) continue;
+        final sourceRaw = (raw['source'] ?? '').toString();
+        final source = sourceRaw == 'singles'
+            ? ItemSource.singles
+            : sourceRaw == 'blends'
+                ? ItemSource.blends
+                : null;
+        if (source == null) continue;
+        final item = _findItem(id, source);
+        if (item == null) continue;
+        final grams = _readInt(raw['grams']);
+        if (grams <= 0) continue;
+        final line = _BlendLine()
+          ..item = item
+          ..mode = LineInputMode.grams
+          ..grams = grams;
+        newLines.add(line);
+      }
+    }
+
+    final title =
+        (data['title'] ?? data['custom_title'] ?? '').toString().trim();
+    final isComplimentary = _readBool(data['is_complimentary']);
+    final isDeferred = _readBool(data['is_deferred']);
+    final isSpiced = _readBool(data['spiced']) ||
+        _deriveSpicedFromComponents(components);
+    final ginsengGrams = _readInt(data['ginseng_grams']);
+    final canSpice = newLines.any((l) => l.item?.supportsSpice == true);
+
+    if (newLines.isEmpty) newLines.add(_BlendLine());
+
+    setState(() {
+      _lines
+        ..clear()
+        ..addAll(newLines);
+      if (title.isNotEmpty) {
+        _titleCtrl.text = title;
+      }
+      _isComplimentary = isComplimentary;
+      _isDeferred = isComplimentary ? false : isDeferred;
+      _isSpiced = isSpiced && canSpice;
+      _ginsengGrams = ginsengGrams;
+      if (_isComplimentary) {
+        _noteCtrl.clear();
+      }
+      _templateApplied = true;
+    });
   }
 
   bool get _hasInvalidLine {
@@ -461,6 +572,10 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
     }
     if (_lines.isEmpty || _hasInvalidLine) {
       throw UserFriendly('من فضلك اختر الأصناف وأدخل الكميات.');
+    }
+    final customTitle = _titleCtrl.text.trim();
+    if (customTitle.isEmpty) {
+      throw UserFriendly(AppStrings.errorCustomBlendTitleRequired);
     }
 
     final Map<String, int> gramsBySinglesId = {};
@@ -534,6 +649,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
     final meta = <String, dynamic>{
       'components': components,
+      'custom_title': customTitle,
       'spiced': _isSpiced && _canSpiceAny,
       'ginseng_grams': _ginsengGrams,
       'ginseng_price_per_g': _ginsengPricePerG,
@@ -549,7 +665,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
       id: CartLine.newId(),
       productId: 'custom_blend',
       name: 'خلطة مخصصة',
-      variant: null,
+      variant: customTitle,
       type: 'custom_blend',
       unit: 'g',
       image: 'assets/custom.jpg',
@@ -597,12 +713,12 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
         await showDialog(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('تعذر إضافة الخلطة'),
+            title: const Text(AppStrings.dialogBlendAddFailed),
             content: SingleChildScrollView(child: Text(msg)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('حسناً'),
+                child: const Text(AppStrings.dialogOk),
               ),
             ],
           ),
@@ -610,6 +726,12 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
       } finally {
         if (mounted) setState(() => _busy = false);
       }
+      return;
+    }
+
+    final customTitle = _titleCtrl.text.trim();
+    if (customTitle.isEmpty) {
+      setState(() => _fatal = AppStrings.errorCustomBlendTitleRequired);
       return;
     }
 
@@ -656,7 +778,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             final vr = (data['variant'] ?? '').toString();
             final label = vr.isNotEmpty ? '$nm - $vr' : nm;
             throw UserFriendly(
-              'المخزون غير كافٍ لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
+              'AppStrings.stockNotEnough لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
             );
           }
           currentStockSingles[id] = cur;
@@ -680,7 +802,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             final vr = (data['variant'] ?? '').toString();
             final label = vr.isNotEmpty ? '$nm - $vr' : nm;
             throw UserFriendly(
-              'المخزون غير كافٍ لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
+              'AppStrings.stockNotEnough لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
             );
           }
           currentStockBlends[id] = cur;
@@ -760,6 +882,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           'created_at': FieldValue.serverTimestamp(),
           'created_by': 'cashier_web',
           'type': 'custom_blend',
+          'custom_title': customTitle,
 
           // حالات
           'is_complimentary': isComp,
@@ -793,6 +916,20 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
           'components': components,
         });
+
+        final blendRef = db.collection('custom_blends').doc();
+        txn.set(blendRef, {
+          'title': customTitle,
+          'created_at': FieldValue.serverTimestamp(),
+          'components': components,
+          'total_grams': _sumGrams.toDouble(),
+          'total_price': totalPriceWould,
+          'spiced': _isSpiced && _canSpiceAny,
+          'ginseng_grams': _ginsengGrams,
+          'is_complimentary': isComp,
+          'is_deferred': isDef,
+          'sale_id': saleRef.id,
+        });
       });
 
       if (!mounted) return;
@@ -808,16 +945,58 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
       await showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('تعذر إتمام العملية'),
+          title: const Text(AppStrings.dialogUnableToCompleteOperation),
           content: SingleChildScrollView(child: Text(msg)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('حسناً'),
+              child: const Text(AppStrings.dialogOk),
             ),
           ],
         ),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _commitInstantInvoice() async {
+    if (!_canQuickConfirm || _busy) return;
+    if (_allItems.isEmpty) {
+      setState(() => _fatal = '?? ??? ????? ??????? ???.');
+      return;
+    }
+    if (_lines.isEmpty || _hasInvalidLine) {
+      setState(() => _fatal = '?? ???? ???? ??????? ????? ???????.');
+      return;
+    }
+    final customTitle = _titleCtrl.text.trim();
+    if (customTitle.isEmpty) {
+      setState(() => _fatal = AppStrings.errorCustomBlendTitleRequired);
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _fatal = null;
+    });
+    try {
+      final line = _buildCartLine();
+      final tempCart = CartState();
+      tempCart.addLine(line);
+      if (line.isComplimentary) {
+        tempCart.setInvoiceComplimentary(true);
+      }
+      await CartCheckout.commitInvoice(cart: tempCart);
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      Navigator.pop(context, line);
+      messenger?.showSnackBar(
+        const SnackBar(content: Text(AppStrings.dialogInvoiceCreated)),
+      );
+    } catch (e, st) {
+      logError(e, st);
+      if (mounted) await showErrorDialog(context, e, st);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -848,12 +1027,25 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
   @override
   void dispose() {
     _noteCtrl.dispose();
+    _titleCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 1000;
+    final titleSize = ResponsiveValue<double>(
+      context,
+      defaultValue: 28,
+      conditionalValues: const [
+        Condition.smallerThan(name: TABLET, value: 22),
+        Condition.between(
+          start: AppBreakpoints.tabletStart,
+          end: AppBreakpoints.tabletEnd,
+          value: 26,
+        ),
+        Condition.largerThan(name: DESKTOP, value: 32),
+      ],
+    ).value;
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 160),
@@ -875,13 +1067,13 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                   color: Colors.white,
                 ),
                 onPressed: () => Navigator.maybePop(context),
-                tooltip: 'رجوع',
+                tooltip: AppStrings.tooltipBack,
               ),
-              title: const Text(
-                'توليفات العميل',
+              title: Text(
+                AppStrings.titleCustomBlends,
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
-                  fontSize: 35,
+                  fontSize: titleSize,
                   color: Colors.white,
                 ),
               ),
@@ -904,14 +1096,22 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             ? const Center(child: CircularProgressIndicator())
             : LayoutBuilder(
                 builder: (context, c) {
+                  final maxWidth = c.maxWidth;
+                  final isWide = AppBreakpoints.isDesktop(maxWidth);
+                  final horizontalPadding = maxWidth < 600 ? 12.0 : 16.0;
                   final composer = SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      12,
+                      horizontalPadding,
+                      90,
+                    ),
                     child: Column(
                       children: [
                         Row(
                           children: [
                             const Text(
-                              'مكوّنات التوليفة',
+                              AppStrings.labelBlendComponents,
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
@@ -930,7 +1130,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                                       () => _lines.add(_BlendLine()),
                                     ),
                               icon: const Icon(Icons.add),
-                              label: const Text('إضافة مكوّن'),
+                              label: const Text(AppStrings.labelAddComponent),
                             ),
                           ],
                         ),
@@ -984,7 +1184,12 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                   );
 
                   final totals = Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      16,
+                      horizontalPadding,
+                      80,
+                    ),
                     child: _TotalsCard(
                       isComplimentary: _isComplimentary,
                       onComplimentaryChanged: _busy
@@ -998,6 +1203,8 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                       onSpicedChanged: _busy || !_canSpiceAny
                           ? null
                           : (v) => setState(() => _isSpiced = v ?? false),
+                      titleController: _titleCtrl,
+                      titleEnabled: !_busy,
                       ginsengGrams: _ginsengGrams,
                       onGinsengMinus: _busy
                           ? null
@@ -1059,7 +1266,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                   child: OutlinedButton(
                     onPressed: _busy ? null : () => Navigator.maybePop(context),
                     child: const Text(
-                      'إلغاء',
+                      AppStrings.dialogCancel,
                       style: TextStyle(color: Color(0xFF543824)),
                     ),
                   ),
@@ -1073,6 +1280,8 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                       ),
                     ),
                     onPressed: _busy ? null : _commitSale,
+                    onLongPress:
+                        _busy || !_canQuickConfirm ? null : _commitInstantInvoice,
                     icon: _busy
                         ? const SizedBox(
                             width: 18,
@@ -1080,447 +1289,13 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.check),
-                    label: const Text('تأكيد'),
+                    label: const Text(AppStrings.dialogConfirm),
                   ),
                 ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// ====== كارت سطر ======
-class _LineCard extends StatelessWidget {
-  final List<SingleVariantItem> items; // Singles + Blends
-  final _BlendLine line;
-  final VoidCallback onChanged;
-  final VoidCallback? onRemove;
-
-  final VoidCallback onTapGrams;
-  final VoidCallback onTapPrice;
-
-  const _LineCard({
-    required this.items,
-    required this.line,
-    required this.onChanged,
-    required this.onTapGrams,
-    required this.onTapPrice,
-    this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 840;
-
-    final dropdown = DropdownButtonFormField<SingleVariantItem>(
-      isExpanded: true,
-      initialValue: line.item,
-      items: items.map((it) {
-        final outOfStock = it.stock <= 0;
-        final prefix = it.source == ItemSource.blends ? '' : '';
-        return DropdownMenuItem<SingleVariantItem>(
-          value: it,
-          enabled: !outOfStock,
-          child: Text(
-            outOfStock
-                ? '$prefix${it.fullLabel} (غير متاح)'
-                : '$prefix${it.fullLabel}',
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: outOfStock ? Colors.grey : null,
-              decoration: outOfStock
-                  ? TextDecoration.lineThrough
-                  : TextDecoration.none,
-              decorationThickness: outOfStock ? 1 : 0,
-            ),
-          ),
-        );
-      }).toList(),
-      selectedItemBuilder: (ctx) => items.map((it) {
-        final outOfStock = it.stock <= 0;
-        final prefix = it.source == ItemSource.blends ? '【توليفة】 ' : '';
-        return Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            outOfStock
-                ? '$prefix${it.fullLabel} (غير متاح)'
-                : '$prefix${it.fullLabel}',
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: outOfStock ? Colors.grey : null,
-              decoration: outOfStock
-                  ? TextDecoration.lineThrough
-                  : TextDecoration.none,
-              decorationThickness: outOfStock ? 1 : 0,
-            ),
-          ),
-        );
-      }).toList(),
-      onChanged: (v) {
-        if (v == null || v.stock <= 0) return;
-        line.item = v;
-        onChanged();
-      },
-      decoration: const InputDecoration(
-        labelText: 'اختر الصنف',
-        border: OutlineInputBorder(),
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      ),
-    );
-
-    // حقل الجرامات (readOnly + يفتح نومباد)
-    final gramField = TextFormField(
-      readOnly: true,
-      controller: TextEditingController(
-        text: line.mode == LineInputMode.grams && line.grams > 0
-            ? '${line.grams}'
-            : '',
-      ),
-      onTap: onTapGrams,
-      textAlign: TextAlign.center,
-      decoration: const InputDecoration(
-        labelText: 'الكمية (جم)',
-        hintText: 'مثال: 250',
-        border: OutlineInputBorder(),
-        isDense: true,
-      ),
-    );
-
-    // حقل السعر (readOnly + يفتح نومباد)
-    final priceField = TextFormField(
-      readOnly: true,
-      controller: TextEditingController(
-        text: line.mode == LineInputMode.price && line.price > 0
-            ? line.price.toStringAsFixed(2)
-            : '',
-      ),
-      onTap: onTapPrice,
-      textAlign: TextAlign.center,
-      decoration: const InputDecoration(
-        labelText: 'المبلغ (جم)',
-        hintText: 'مثال: 120.00',
-        border: OutlineInputBorder(),
-        isDense: true,
-      ),
-    );
-
-    Widget sideBox() {
-      if (line.mode == LineInputMode.grams) {
-        return _KVBox(
-          title: 'السعر',
-          value: line.linePrice,
-          suffix: 'جم',
-          fractionDigits: 2,
-        );
-      } else {
-        return _KVBox(
-          title: 'الجرامات',
-          value: line.gramsEffective.toDouble(),
-          suffix: 'جم',
-          fractionDigits: 0,
-        );
-      }
-    }
-
-    final modeAndField = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SegmentedButton<LineInputMode>(
-          segments: const [
-            ButtonSegment(
-              value: LineInputMode.grams,
-              label: Text('جرامات'),
-              icon: Icon(Icons.scale),
-            ),
-            ButtonSegment(
-              value: LineInputMode.price,
-              label: Text('سعر'),
-              icon: Icon(Icons.attach_money),
-            ),
-          ],
-          selected: {line.mode},
-          onSelectionChanged: (s) {
-            line.mode = s.first;
-            onChanged();
-          },
-          showSelectedIcon: false,
-        ),
-        const SizedBox(height: 8),
-        if (line.mode == LineInputMode.grams) gramField else priceField,
-        if (line.mode == LineInputMode.price) ...[
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              'الجرامات المحسوبة: ${line.gramsEffective} جم',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ],
-    );
-
-    final removeBtn = IconButton(
-      tooltip: 'حذف',
-      onPressed: onRemove,
-      icon: const Icon(Icons.delete_outline),
-    );
-
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: isWide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(flex: 5, child: dropdown),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 5, child: modeAndField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 3, child: sideBox()),
-                  const SizedBox(width: 8),
-                  removeBtn,
-                ],
-              )
-            : Column(
-                children: [
-                  dropdown,
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 6, child: modeAndField),
-                      const SizedBox(width: 8),
-                      Expanded(flex: 4, child: sideBox()),
-                    ],
-                  ),
-                  Align(alignment: Alignment.centerLeft, child: removeBtn),
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-class _KVBox extends StatelessWidget {
-  final String title;
-  final double value;
-  final String? suffix;
-  final int fractionDigits;
-
-  const _KVBox({
-    required this.title,
-    required this.value,
-    this.suffix,
-    this.fractionDigits = 2,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final vText =
-        value.toStringAsFixed(fractionDigits) +
-        (suffix != null ? ' $suffix' : '');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.brown.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.brown.shade100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 12)),
-          const SizedBox(height: 6),
-          Text(vText, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
-class _TotalsCard extends StatelessWidget {
-  final bool isComplimentary;
-  final ValueChanged<bool?>? onComplimentaryChanged;
-
-  final bool isDeferred;
-  final ValueChanged<bool?>? onDeferredChanged;
-
-  final bool isSpiced;
-  final ValueChanged<bool?>? onSpicedChanged;
-
-  final int ginsengGrams;
-  final VoidCallback? onGinsengMinus;
-  final VoidCallback? onGinsengPlus;
-
-  final int totalGrams;
-  final double beansAmount;
-  final double spiceAmount;
-  final double ginsengAmount;
-  final double totalPrice;
-  final TextEditingController noteController;
-  final bool noteVisible;
-  final bool noteEnabled;
-
-  const _TotalsCard({
-    required this.isComplimentary,
-    required this.onComplimentaryChanged,
-    required this.isDeferred,
-    required this.onDeferredChanged,
-    required this.isSpiced,
-    required this.onSpicedChanged,
-    required this.ginsengGrams,
-    required this.onGinsengMinus,
-    required this.onGinsengPlus,
-    required this.totalGrams,
-    required this.beansAmount,
-    required this.spiceAmount,
-    required this.ginsengAmount,
-    required this.totalPrice,
-    required this.noteController,
-    required this.noteVisible,
-    required this.noteEnabled,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            // — ضيافة + أجِّل (متعارضين) في صف واحد —
-            Row(
-              children: [
-                Expanded(
-                  child: ToggleCard(
-                    title: 'ضيافة',
-                    value: isComplimentary,
-                    onChanged: (v) => onComplimentaryChanged?.call(v),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ToggleCard(
-                    title: 'أجِّل',
-                    value: isDeferred,
-                    onChanged: (v) => onDeferredChanged?.call(v),
-                  ),
-                ),
-              ],
-            ),
-            DeferredNoteField(
-              controller: noteController,
-              visible: noteVisible,
-              enabled: noteEnabled,
-            ),
-            const SizedBox(height: 12),
-            // — محوّج —
-            ToggleCard(
-              title: 'محوّج',
-              value: isSpiced,
-              onChanged: (v) => onSpicedChanged?.call(v),
-            ),
-
-            // — جينسنج —
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.brown.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.brown.shade100),
-              ),
-              child: Row(
-                children: [
-                  const Text(
-                    'جينسنج',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const Spacer(),
-                  IconButton.filledTonal(
-                    onPressed: onGinsengMinus,
-                    icon: const Icon(Icons.remove),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Text(
-                      '$ginsengGrams جم',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  IconButton.filledTonal(
-                    onPressed: onGinsengPlus,
-                    icon: const Icon(Icons.add),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-            _row('إجمالي الجرامات', '$totalGrams جم'),
-            const SizedBox(height: 6),
-            _row('سعر البن', beansAmount.toStringAsFixed(2)),
-            _row('سعر التحويج', spiceAmount.toStringAsFixed(2)),
-            _row('سعر الجينسنج', ginsengAmount.toStringAsFixed(2)),
-            const Divider(height: 18),
-            _row('الإجمالي', totalPrice.toStringAsFixed(2)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String k, String v) {
-    return Row(
-      children: [
-        Text(k),
-        const Spacer(),
-        Text(v, style: const TextStyle(fontWeight: FontWeight.w700)),
-      ],
-    );
-  }
-}
-
-class _WarningBox extends StatelessWidget {
-  final String text;
-  const _WarningBox({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange.shade200),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.warning_amber, color: Colors.orange),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(text, style: const TextStyle(color: Colors.orange)),
-          ),
-        ],
       ),
     );
   }

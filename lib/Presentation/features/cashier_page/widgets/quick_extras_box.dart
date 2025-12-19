@@ -1,5 +1,6 @@
 import 'package:elfouad_coffee_beans/core/services/extras_repo.dart'
     show sellExtra, extrasStreamByCategory;
+import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:elfouad_coffee_beans/data/models/extra_item.dart'
     show ExtraItem;
 import 'package:flutter/material.dart';
@@ -33,11 +34,13 @@ class QuickExtrasBox extends StatelessWidget {
                 );
               }
               if (snap.hasError) {
-                return Text('Error loading $title: ${snap.error}');
+                return Text(
+                  AppStrings.errorLoadingGeneric(title, snap.error!),
+                );
               }
               final items = snap.data ?? const <ExtraItem>[];
               if (items.isEmpty) {
-                return const Text('No quick extras available right now.');
+                return const Text(AppStrings.emptyQuickExtrasEn);
               }
 
               return Column(
@@ -45,18 +48,28 @@ class QuickExtrasBox extends StatelessWidget {
                 children: [
                   Text(title, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 1.1,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                        ),
-                    itemCount: items.length,
-                    itemBuilder: (_, i) => _ItemTile(item: items[i]),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final max = constraints.maxWidth;
+                      final cross = max >= 900
+                          ? 4
+                          : max >= 640
+                          ? 3
+                          : 2;
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: cross,
+                              childAspectRatio: 1.1,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                            ),
+                        itemCount: items.length,
+                        itemBuilder: (_, i) => _ItemTile(item: items[i]),
+                      );
+                    },
                   ),
                 ],
               );
@@ -88,11 +101,11 @@ class _ItemTile extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: const Text(AppStrings.btnCancelEn),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Sell'),
+              child: const Text(AppStrings.btnSellEn),
             ),
           ],
         ),
@@ -107,7 +120,9 @@ class _ItemTile extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to sell item: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(AppStrings.failedToSellItem(error))),
+      );
     } finally {
       controller.dispose();
     }
@@ -135,12 +150,12 @@ class _ItemTile extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '${item.priceSell.toStringAsFixed(2)} EGP / unit',
+              '${item.priceSell.toStringAsFixed(2)} EGP / ${AppStrings.labelPieceUnitEn}',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
             Text(
-              'Stock: ${item.stockUnits}',
+              AppStrings.stockPiecesEn(item.stockUnits),
               style: TextStyle(color: Colors.brown.shade700, fontSize: 12),
             ),
           ],
