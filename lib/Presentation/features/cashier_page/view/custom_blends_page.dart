@@ -1234,7 +1234,11 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(child: composer),
-                        SizedBox(width: 360, child: totals),
+                        SizedBox(
+                          width: 360,
+                          height: c.maxHeight,
+                          child: SingleChildScrollView(child: totals),
+                        ),
                       ],
                     );
                   } else {
