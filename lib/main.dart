@@ -105,38 +105,32 @@ class MyApp extends StatelessWidget {
           ),
         ),
         textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF543824),
-          ),
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFF543824)),
         ),
         checkboxTheme: CheckboxThemeData(
           fillColor: WidgetStateProperty.resolveWith(
-            (states) =>
-                states.contains(WidgetState.selected)
-                    ? const Color(0xFF543824)
-                    : null,
+            (states) => states.contains(WidgetState.selected)
+                ? const Color(0xFF543824)
+                : null,
           ),
         ),
         radioTheme: RadioThemeData(
           fillColor: WidgetStateProperty.resolveWith(
-            (states) =>
-                states.contains(WidgetState.selected)
-                    ? const Color(0xFF543824)
-                    : null,
+            (states) => states.contains(WidgetState.selected)
+                ? const Color(0xFF543824)
+                : null,
           ),
         ),
         switchTheme: SwitchThemeData(
           thumbColor: WidgetStateProperty.resolveWith(
-            (states) =>
-                states.contains(WidgetState.selected)
-                    ? const Color(0xFF543824)
-                    : null,
+            (states) => states.contains(WidgetState.selected)
+                ? const Color(0xFF543824)
+                : null,
           ),
           trackColor: WidgetStateProperty.resolveWith(
-            (states) =>
-                states.contains(WidgetState.selected)
-                    ? const Color(0xFFB38A6F)
-                    : null,
+            (states) => states.contains(WidgetState.selected)
+                ? const Color(0xFFB38A6F)
+                : null,
           ),
         ),
         dividerTheme: DividerThemeData(

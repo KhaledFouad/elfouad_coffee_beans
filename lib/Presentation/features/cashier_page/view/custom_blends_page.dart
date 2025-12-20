@@ -479,6 +479,25 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
   bool _readBool(dynamic v) => v == true;
 
+  Future<DocumentReference<Map<String, dynamic>>> _resolveCustomBlendRef(
+    FirebaseFirestore db,
+    String title,
+  ) async {
+    final normalized = title.trim();
+    if (normalized.isEmpty) {
+      return db.collection('custom_blends').doc();
+    }
+    final snap = await db
+        .collection('custom_blends')
+        .where('title', isEqualTo: normalized)
+        .limit(1)
+        .get();
+    if (snap.docs.isNotEmpty) {
+      return snap.docs.first.reference;
+    }
+    return db.collection('custom_blends').doc();
+  }
+
   SingleVariantItem? _findItem(String id, ItemSource source) {
     for (final it in _allItems) {
       if (it.id == id && it.source == source) return it;
@@ -580,13 +599,17 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
 
     final Map<String, int> gramsBySinglesId = {};
     final Map<String, int> gramsByBlendsId = {};
+    final Map<String, String> labelBySinglesId = {};
+    final Map<String, String> labelByBlendsId = {};
     for (final l in _lines) {
       final it = l.item!;
       final g = l.gramsEffective;
       if (it.source == ItemSource.singles) {
         gramsBySinglesId[it.id] = (gramsBySinglesId[it.id] ?? 0) + g;
+        labelBySinglesId[it.id] = it.fullLabel;
       } else {
         gramsByBlendsId[it.id] = (gramsByBlendsId[it.id] ?? 0) + g;
+        labelByBlendsId[it.id] = it.fullLabel;
       }
     }
 
@@ -637,6 +660,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           docId: entry.key,
           field: 'stock',
           amount: entry.value.toDouble(),
+          label: labelBySinglesId[entry.key],
         ),
       for (final entry in gramsByBlendsId.entries)
         StockImpact(
@@ -644,6 +668,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           docId: entry.key,
           field: 'stock',
           amount: entry.value.toDouble(),
+          label: labelByBlendsId[entry.key],
         ),
     ];
 
@@ -743,6 +768,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
     final db = FirebaseFirestore.instance;
 
     try {
+      final blendRef = await _resolveCustomBlendRef(db, customTitle);
       await db.runTransaction((txn) async {
         final Map<String, int> gramsBySinglesId = {};
         final Map<String, int> gramsByBlendsId = {};
@@ -778,7 +804,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             final vr = (data['variant'] ?? '').toString();
             final label = vr.isNotEmpty ? '$nm - $vr' : nm;
             throw UserFriendly(
-              'AppStrings.stockNotEnough لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
+              '${AppStrings.errorStockNotEnoughSimple} لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
             );
           }
           currentStockSingles[id] = cur;
@@ -802,7 +828,7 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
             final vr = (data['variant'] ?? '').toString();
             final label = vr.isNotEmpty ? '$nm - $vr' : nm;
             throw UserFriendly(
-              'AppStrings.stockNotEnough لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
+              '${AppStrings.errorStockNotEnoughSimple} لـ "$label".\nالمتاح: ${cur.toStringAsFixed(0)} جم • المطلوب: ${need.toStringAsFixed(0)} جم',
             );
           }
           currentStockBlends[id] = cur;
@@ -917,19 +943,22 @@ class _CustomBlendsPageState extends State<CustomBlendsPage> {
           'components': components,
         });
 
-        final blendRef = db.collection('custom_blends').doc();
-        txn.set(blendRef, {
-          'title': customTitle,
-          'created_at': FieldValue.serverTimestamp(),
-          'components': components,
-          'total_grams': _sumGrams.toDouble(),
-          'total_price': totalPriceWould,
-          'spiced': _isSpiced && _canSpiceAny,
-          'ginseng_grams': _ginsengGrams,
-          'is_complimentary': isComp,
-          'is_deferred': isDef,
-          'sale_id': saleRef.id,
-        });
+        txn.set(
+          blendRef,
+          {
+            'title': customTitle,
+            'created_at': FieldValue.serverTimestamp(),
+            'components': components,
+            'total_grams': _sumGrams.toDouble(),
+            'total_price': totalPriceWould,
+            'spiced': _isSpiced && _canSpiceAny,
+            'ginseng_grams': _ginsengGrams,
+            'is_complimentary': isComp,
+            'is_deferred': isDef,
+            'sale_id': saleRef.id,
+          },
+          SetOptions(merge: true),
+        );
       });
 
       if (!mounted) return;

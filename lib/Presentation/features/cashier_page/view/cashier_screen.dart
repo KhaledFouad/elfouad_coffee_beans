@@ -62,7 +62,6 @@ class _PosShellState extends State<_PosShell> {
 
   @override
   Widget build(BuildContext context) {
-    final cart = context.watch<CartCubit>().cart;
     final cashierState = context.watch<CashierCubit>().state;
 
     return LayoutBuilder(
@@ -93,7 +92,7 @@ class _PosShellState extends State<_PosShell> {
                     child: CartPanel(
                       noteCtrl: _noteCtrl,
                       checkingOut: _checkingOut,
-                      onCheckout: () => _checkout(cart),
+                      onCheckout: _checkout,
                     ),
                   ),
                 )
@@ -122,7 +121,6 @@ class _PosShellState extends State<_PosShell> {
                         child: Padding(
                           padding: catalogPadding,
                           child: _buildCatalog(
-                            cart,
                             cashierState.selectedCategory,
                             cashierState.searchQuery,
                           ),
@@ -153,7 +151,6 @@ class _PosShellState extends State<_PosShell> {
                             child: Padding(
                               padding: catalogPadding,
                               child: _buildCatalog(
-                                cart,
                                 cashierState.selectedCategory,
                                 cashierState.searchQuery,
                               ),
@@ -167,7 +164,7 @@ class _PosShellState extends State<_PosShell> {
                       child: CartPanel(
                         noteCtrl: _noteCtrl,
                         checkingOut: _checkingOut,
-                        onCheckout: () => _checkout(cart),
+                        onCheckout: _checkout,
                       ),
                     ),
                   ],
@@ -181,7 +178,6 @@ class _PosShellState extends State<_PosShell> {
   }
 
   Widget _buildCatalog(
-    CartState cart,
     CashierCategory selectedCategory,
     String query,
   ) {
@@ -209,7 +205,8 @@ class _PosShellState extends State<_PosShell> {
     context.read<CartCubit>().addLine(line);
   }
 
-  Future<void> _checkout(CartState cart) async {
+  Future<void> _checkout() async {
+    final cart = context.read<CartCubit>().cart;
     if (cart.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text(AppStrings.cartEmptyAddProductsFirst)),

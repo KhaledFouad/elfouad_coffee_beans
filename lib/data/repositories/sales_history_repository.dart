@@ -44,7 +44,7 @@ class SalesHistoryRepository {
 
     // أول صفحة: ضيف معاها الفواتير المؤجلة الغير مسددة
     if (startAfter == null) {
-      final settledSnap = await _firestore
+      final settledFuture = _firestore
           .collection('sales')
           .where(
             'settled_at',
@@ -55,11 +55,14 @@ class SalesHistoryRepository {
           .orderBy('settled_at', descending: true)
           .get();
 
-      final deferredSnap = await _firestore
+      final deferredFuture = _firestore
           .collection('sales')
           .where('is_deferred', isEqualTo: true)
           .where('paid', isEqualTo: false)
           .get();
+
+      final settledSnap = await settledFuture;
+      final deferredSnap = await deferredFuture;
 
       if (deferredSnap.docs.isNotEmpty || settledSnap.docs.isNotEmpty) {
         final combined =
@@ -88,7 +91,7 @@ class SalesHistoryRepository {
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchAllForRange({
     required DateTimeRange range,
   }) async {
-    final createdSnap = await _firestore
+    final createdFuture = _firestore
         .collection('sales')
         .where(
           'created_at',
@@ -98,7 +101,7 @@ class SalesHistoryRepository {
         .orderBy('created_at', descending: true)
         .get();
 
-    final settledSnap = await _firestore
+    final settledFuture = _firestore
         .collection('sales')
         .where(
           'settled_at',
@@ -108,6 +111,9 @@ class SalesHistoryRepository {
         .where('paid', isEqualTo: true)
         .orderBy('settled_at', descending: true)
         .get();
+
+    final createdSnap = await createdFuture;
+    final settledSnap = await settledFuture;
 
     final combined = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
     for (final d in createdSnap.docs) {

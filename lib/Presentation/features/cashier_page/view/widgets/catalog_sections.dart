@@ -20,11 +20,13 @@ class DrinksGrid extends StatelessWidget {
 
   final String query;
   final ValueChanged<CartLine> onAdd;
+  static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
+      FirebaseFirestore.instance.collection('drinks').snapshots();
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('drinks').snapshots(),
+      stream: _stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -98,11 +100,13 @@ class SinglesGrid extends StatelessWidget {
 
   final String query;
   final ValueChanged<CartLine> onAdd;
+  static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
+      FirebaseFirestore.instance.collection('singles').snapshots();
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('singles').snapshots(),
+      stream: _stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -186,11 +190,13 @@ class BlendsGrid extends StatelessWidget {
 
   final String query;
   final ValueChanged<CartLine> onAdd;
+  static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
+      FirebaseFirestore.instance.collection('blends').snapshots();
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('blends').snapshots(),
+      stream: _stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -280,14 +286,16 @@ class ExtrasGrid extends StatelessWidget {
 
   final String query;
   final ValueChanged<CartLine> onAdd;
+  static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
+      FirebaseFirestore.instance
+          .collection('extras')
+          .where('category', isEqualTo: 'biscuits')
+          .snapshots();
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('extras')
-          .where('category', isEqualTo: 'biscuits')
-          .snapshots(),
+      stream: _stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -370,6 +378,12 @@ class CustomBlendEntry extends StatelessWidget {
   const CustomBlendEntry({super.key, required this.onAdd});
 
   final ValueChanged<CartLine> onAdd;
+  static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
+      FirebaseFirestore.instance
+          .collection('custom_blends')
+          .orderBy('created_at', descending: true)
+          .limit(30)
+          .snapshots();
 
   String? _formatCreatedAt(dynamic value) {
     final createdAt = parseOptionalDate(value);
@@ -445,11 +459,7 @@ class CustomBlendEntry extends StatelessWidget {
     );
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('custom_blends')
-          .orderBy('created_at', descending: true)
-          .limit(30)
-          .snapshots(),
+      stream: _stream,
       builder: (context, snap) {
         final items = <CatalogItem>[prepareItem];
         if (snap.hasData) {

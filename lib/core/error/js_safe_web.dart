@@ -12,3 +12,22 @@ Object? getJsProp(Object target, String prop) {
     return null;
   }
 }
+
+List<String> getJsKeys(Object target) {
+  try {
+    final keys = js_util.objectKeys(target);
+    return List<String>.from(keys);
+  } catch (_) {
+    return const [];
+  }
+}
+
+String? jsStringify(Object target) {
+  try {
+    final json = js_util.getProperty(js_util.globalThis, 'JSON');
+    final out = js_util.callMethod(json, 'stringify', [target]);
+    return out?.toString();
+  } catch (_) {
+    return null;
+  }
+}
