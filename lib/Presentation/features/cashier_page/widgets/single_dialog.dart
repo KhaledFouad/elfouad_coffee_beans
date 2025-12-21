@@ -5,22 +5,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/singles_models.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/widgets/toggle_card.dart';
+import 'package:elfouad_coffee_beans/core/di/di.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'dialogs/dialog_action_row.dart';
 import 'dialogs/dialog_image_header.dart';
 
-class UserFriendly implements Exception {
-  final String message;
-  UserFriendly(this.message);
-  @override
-  String toString() => message;
-}
-
-enum CalcMode { byGrams, byMoney }
-
-enum _PadTarget { grams, money, none }
+part 'single_dialog_models.dart';
+part 'single_dialog_load.dart';
+part 'single_dialog_pad.dart';
+part 'single_dialog_components.dart';
+part 'single_dialog_checkout.dart';
+part 'single_dialog_build.dart';
+part 'single_dialog_helpers.dart';
 
 class SingleDialog extends StatefulWidget {
   final SingleGroup group;
@@ -42,37 +40,116 @@ class SingleDialog extends StatefulWidget {
   State<SingleDialog> createState() => _SingleDialogState();
 }
 
-class _SingleDialogState extends State<SingleDialog> {
+abstract class _SingleDialogStateBase extends State<SingleDialog> {
+  bool get _busy;
+  set _busy(bool value);
+
+  String? get _fatal;
+  set _fatal(String? value);
+
+  bool get _canQuickConfirm;
+
+  List<String> get _roastOptions;
+  String? get _roast;
+  set _roast(String? value);
+
+  Map<String, double> get _stockByVariantId;
+  Map<String, double> get _spicesPriceByVariantId;
+  Map<String, double> get _spicesCostByVariantId;
+
+  bool get _stocksLoading;
+  set _stocksLoading(bool value);
+
+  TextEditingController get _gramsCtrl;
+  TextEditingController get _moneyCtrl;
+
+  CalcMode get _mode;
+  set _mode(CalcMode value);
+
+  bool get _isComplimentary;
+  set _isComplimentary(bool value);
+  bool get _isSpiced;
+  set _isSpiced(bool value);
+
+  int get _ginsengGrams;
+  set _ginsengGrams(int value);
+
+  bool get _showPad;
+  set _showPad(bool value);
+  _PadTarget get _padTarget;
+  set _padTarget(_PadTarget value);
+
+  SingleVariant? get _selected;
+  bool get _canSpice;
+  double get _sellPerKg;
+  double get _pricePerG;
+  int get _grams;
+  double get _totalPrice;
+
+  Widget _ginsengCard();
+  void _openPad(_PadTarget target);
+  void _closePad();
+  Widget _numPad({required bool allowDot});
+
+  CartLine _buildCartLine();
+  Future<void> _commitSale();
+  Future<void> _commitInstantInvoice();
+}
+
+class _SingleDialogState extends _SingleDialogStateBase
+    with
+        _SingleDialogLoad,
+        _SingleDialogPad,
+        _SingleDialogComponents,
+        _SingleDialogCheckout,
+        _SingleDialogBuild {
+  @override
   bool _busy = false;
+  @override
   String? _fatal;
+  @override
   bool get _canQuickConfirm => widget.cartMode || widget.onAddToCart != null;
 
   // roast (variant)
+  @override
   late final List<String> _roastOptions;
+  @override
   String? _roast;
 
+  @override
   final Map<String, double> _stockByVariantId = {};
+  @override
   final Map<String, double> _spicesPriceByVariantId =
       {}; // سعر التحويج/كجم (للبيع)
+  @override
   final Map<String, double> _spicesCostByVariantId = {}; // تكلفة التحويج/كجم
+  @override
   bool _stocksLoading = true;
 
+  @override
   final TextEditingController _gramsCtrl = TextEditingController();
+  @override
   final TextEditingController _moneyCtrl = TextEditingController();
 
+  @override
   CalcMode _mode = CalcMode.byGrams;
 
   // محوّج
+  @override
   bool _isComplimentary = false;
+  @override
   bool _isSpiced = false;
 
   // جينسنج
+  @override
   int _ginsengGrams = 0;
   static const double _ginsengPricePerG = 5.0;
   static const double _ginsengCostPerG = 4.0;
 
   // --- نومباد داخلي ---
+  @override
   bool _showPad = false;
+  @override
   _PadTarget _padTarget = _PadTarget.none;
 
   int _parseInt(String s) {
@@ -107,65 +184,14 @@ class _SingleDialogState extends State<SingleDialog> {
     _preloadStocks();
   }
 
-  Future<void> _preloadStocks() async {
-    try {
-      final db = FirebaseFirestore.instance;
-      final futures = <Future<void>>[];
-      for (final v in widget.group.variants.values) {
-        futures.add(
-          db.collection('singles').doc(v.id).get().then((snap) {
-            final m = snap.data();
-            double stock = 0.0;
-            double spicesPrice = 0.0;
-            double spicesCost = 0.0;
-            if (m != null) {
-              final s = m['stock'];
-              stock = (s is num) ? s.toDouble() : double.tryParse('$s') ?? 0.0;
-              final spP = m['spicesPrice'];
-              final spC = m['spicesCost'];
-              spicesPrice = (spP is num)
-                  ? spP.toDouble()
-                  : double.tryParse('$spP') ?? 0.0;
-              spicesCost = (spC is num)
-                  ? spC.toDouble()
-                  : double.tryParse('$spC') ?? 0.0;
-            }
-            _stockByVariantId[v.id] = stock;
-            _spicesPriceByVariantId[v.id] = spicesPrice;
-            _spicesCostByVariantId[v.id] = spicesCost;
-          }),
-        );
-      }
-      await Future.wait(futures);
-
-      final sel = _selected;
-      if (sel != null) {
-        final st = _stockByVariantId[sel.id] ?? 0.0;
-        if (st <= 0) {
-          for (final opt in _roastOptions) {
-            final v = widget.group.variants[opt];
-            if (v == null) continue;
-            final s = _stockByVariantId[v.id] ?? 0.0;
-            if (s > 0) {
-              _roast = opt;
-              break;
-            }
-          }
-        }
-      }
-    } catch (_) {
-      // تجاهل
-    } finally {
-      if (mounted) setState(() => _stocksLoading = false);
-    }
-  }
-
+  @override
   SingleVariant? get _selected {
     final key = _roast ?? '';
     return widget.group.variants[key];
   }
 
   // يحقّ التحويج لو في الداتابيز قيم (سعر/تكلفة) للتحويج
+  @override
   bool get _canSpice {
     final sel = _selected;
     if (sel == null) return false;
@@ -175,6 +201,7 @@ class _SingleDialogState extends State<SingleDialog> {
   }
 
   // أسعار بن (من الموديل)
+  @override
   double get _sellPerKg => _selected?.sellPricePerKg ?? 0.0;
   double get _costPerKg => _selected?.costPricePerKg ?? 0.0;
   double get _sellPerG => _sellPerKg / 1000.0;
@@ -196,6 +223,7 @@ class _SingleDialogState extends State<SingleDialog> {
   double get _spicePricePerG => _spicesPricePerKg / 1000.0;
   double get _spiceCostPerG => _spicesCostPerKg / 1000.0;
 
+  @override
   int get _grams {
     if (_mode == CalcMode.byMoney) {
       final money = _parseDouble(_moneyCtrl.text);
@@ -220,9 +248,11 @@ class _SingleDialogState extends State<SingleDialog> {
       (_isSpiced && _canSpice) ? (_grams * _spiceCostPerG) : 0.0;
   double get _ginsengCostAmount => _ginsengGrams * _ginsengCostPerG;
 
+  @override
   double get _pricePerG =>
       _sellPerG + (_isSpiced && _canSpice ? _spicePricePerG : 0.0);
 
+  @override
   double get _totalPrice =>
       _isComplimentary ? 0.0 : _beansAmount + _spiceAmount + _ginsengPriceAmount;
 
@@ -230,6 +260,7 @@ class _SingleDialogState extends State<SingleDialog> {
       _beansCostAmount + _spiceCostAmount + _ginsengCostAmount;
 
   /// يبني سطر سلة (CartLine)
+  @override
   CartLine _buildCartLine() {
     final sel = _selected;
     if (sel == null) {
@@ -288,578 +319,9 @@ class _SingleDialogState extends State<SingleDialog> {
   }
 
   // ===== نومباد داخلي =====
-  void _openPad(_PadTarget target) {
-    if (_busy) return;
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _padTarget = target;
-      _showPad = true;
-    });
-  }
-
-  void _closePad() {
-    setState(() {
-      _showPad = false;
-      _padTarget = _PadTarget.none;
-    });
-  }
-
-  void _applyPadKey(String k) {
-    final ctrl = (_padTarget == _PadTarget.grams) ? _gramsCtrl : _moneyCtrl;
-    if (k == 'back') {
-      if (ctrl.text.isNotEmpty) {
-        ctrl.text = ctrl.text.substring(0, ctrl.text.length - 1);
-      }
-    } else if (k == 'clear') {
-      ctrl.clear();
-    } else if (k == 'dot') {
-      if (_padTarget == _PadTarget.money && !ctrl.text.contains('.')) {
-        ctrl.text = (ctrl.text.isEmpty ? '0.' : '${ctrl.text}.');
-      }
-    } else if (k == 'done') {
-      _closePad();
-      return;
-    } else {
-      ctrl.text += k;
-    }
-    setState(() {});
-  }
-
-  Widget _numPad({required bool allowDot}) {
-    final keys = <String>[
-      '3',
-      '2',
-      '1',
-      '6',
-      '5',
-      '4',
-      '9',
-      '8',
-      '7',
-      allowDot ? 'dot' : 'clear',
-      '0',
-      'back',
-    ];
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final maxW = c.maxWidth;
-        final btnSize = (maxW - 3 * 8 - 2 * 12) / 3;
-        return Container(
-          margin: const EdgeInsets.only(top: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.brown.shade50,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.brown.shade100),
-          ),
-          child: Column(
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: keys.map((k) {
-                  IconData? icon;
-                  String label = k;
-                  VoidCallback onTap;
-                  switch (k) {
-                    case 'back':
-                      icon = Icons.backspace_outlined;
-                      label = '';
-                      onTap = () => _applyPadKey('back');
-                      break;
-                    case 'clear':
-                      icon = Icons.clear;
-                      label = '';
-                      onTap = () => _applyPadKey('clear');
-                      break;
-                    case 'dot':
-                      label = '.';
-                      onTap = () => _applyPadKey('dot');
-                      break;
-                    default:
-                      onTap = () => _applyPadKey(k);
-                  }
-                  return SizedBox(
-                    width: btnSize,
-                    height: 52,
-                    child: FilledButton.tonal(
-                      onPressed: _busy ? null : onTap,
-                      child: icon != null
-                          ? Icon(icon)
-                          : Text(
-                              label,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton(
-                  style: ButtonStyle(
-                    backgroundColor: WidgetStateProperty.all(
-                      const Color(0xFF543824),
-                    ),
-                  ),
-                  onPressed: _busy ? null : () => _applyPadKey('done'),
-                  child: const Text(
-                    AppStrings.btnDone,
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // === كارت الجينسنج ===
-  Widget _ginsengCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.brown.shade50,
-        border: Border.all(color: Colors.brown.shade100),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          const Text(
-            AppStrings.labelGinseng,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-          ),
-          const Spacer(),
-          IconButton.filledTonal(
-            onPressed: _busy
-                ? null
-                : () {
-                    setState(
-                      () => _ginsengGrams = (_ginsengGrams > 0)
-                          ? _ginsengGrams - 1
-                          : 0,
-                    );
-                  },
-            icon: const Icon(Icons.remove),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(
-              '$_ginsengGrams ${AppStrings.labelGramsShort}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-          ),
-          IconButton.filledTonal(
-            onPressed: _busy
-                ? null
-                : () {
-                    setState(() => _ginsengGrams += 1);
-                  },
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _commitSale() async {
-    final sel = _selected;
-    if (sel == null) {
-      setState(() => _fatal = AppStrings.errorSelectRoast);
-      await showErrorDialog(context, _fatal!);
-      return;
-    }
-    if (_grams <= 0) {
-      setState(() => _fatal = AppStrings.errorEnterValidGramsOrPrice);
-      await showErrorDialog(context, _fatal!);
-      return;
-    }
-
-    // هنا بنضيف للسلة فقط، مفيش مبيعات/مخزون من جوه الديالوج
-    setState(() {
-      _busy = true;
-      _fatal = null;
-    });
-    try {
-      final line = _buildCartLine();
-      widget.onAddToCart?.call(line);
-      if (!mounted) return;
-      Navigator.pop(context, line);
-    } catch (e) {
-      final msg = e is UserFriendly ? e.message : AppStrings.errorUnexpected;
-      if (mounted) {
-        setState(() => _fatal = msg);
-        await showErrorDialog(context, msg);
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _commitInstantInvoice() async {
-    if (!_canQuickConfirm || _busy) return;
-    setState(() {
-      _busy = true;
-      _fatal = null;
-    });
-    try {
-      final line = _buildCartLine();
-      final tempCart = CartState();
-      tempCart.addLine(line);
-      if (line.isComplimentary) {
-        tempCart.setInvoiceComplimentary(true);
-      }
-      await CartCheckout.commitInvoice(cart: tempCart);
-      if (!mounted) return;
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      Navigator.pop(context, line);
-      messenger?.showSnackBar(
-        const SnackBar(content: Text(AppStrings.dialogInvoiceCreated)),
-      );
-    } catch (e, st) {
-      logError(e, st);
-      if (mounted) await showErrorDialog(context, e, st);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final name = widget.group.name;
-    final image = widget.group.image;
-
-    final view = WidgetsBinding.instance.platformDispatcher.views.first;
-    final viewInsets = EdgeInsets.fromViewPadding(
-      view.viewInsets,
-      view.devicePixelRatio,
-    );
-    final bottomInset = viewInsets.bottom;
-    return MediaQuery(
-      data: MediaQuery.of(context).copyWith(viewInsets: viewInsets),
-      child: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: EdgeInsets.only(bottom: bottomInset + 12),
-        child: SafeArea(
-          child: Dialog(
-            insetPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 24,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.zero,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    DialogImageHeader(image: image, title: name),
-
-                    // Body
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          if (_roastOptions.isNotEmpty) ...[
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
-                                children: _roastOptions.map((r) {
-                                  final sel = widget.group.variants[r];
-                                  final isSelected = (_roast ?? '') == r;
-                                  final stock = (sel == null)
-                                      ? 0.0
-                                      : (_stockByVariantId[sel.id] ?? 0.0);
-                                  final disabled =
-                                      !_stocksLoading && stock <= 0.0;
-
-                                  final label = StringBuffer()
-                                    ..write(
-                                        r.isEmpty ? AppStrings.labelNone : r);
-                                  if (disabled) {
-                                    label.write(
-                                      ' (${AppStrings.labelUnavailable})',
-                                    );
-                                  }
-
-                                  return ChoiceChip(
-                                    label: Text(
-                                      label.toString(),
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    selected: isSelected,
-                                    onSelected: (_busy || disabled)
-                                        ? null
-                                        : (v) {
-                                            if (!v) return;
-                                            setState(() => _roast = r);
-                                          },
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    labelPadding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 10,
-                                    ),
-                                    side: BorderSide(
-                                      color: disabled
-                                          ? Colors.grey.shade300
-                                          : Colors.brown.shade200,
-                                    ),
-                                    selectedColor: Colors.brown.shade100,
-                                    backgroundColor: disabled
-                                        ? Colors.grey.shade100
-                                        : null,
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-
-                          // === محوّج فقط في الصف ===
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ToggleCard(
-                                  title: AppStrings.labelHospitality,
-                                  value: _isComplimentary,
-                                  busy: _busy,
-                                  onChanged: (v) =>
-                                      setState(() => _isComplimentary = v),
-                                  leadingIcon: Icons.card_giftcard,
-                                ),
-                              ),
-                              if (_canSpice) ...[
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: ToggleCard(
-                                    title: AppStrings.labelSpiced,
-                                    value: _isSpiced,
-                                    busy: _busy,
-                                    onChanged: (v) =>
-                                        setState(() => _isSpiced = v),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-
-                          // === Ginseng add-on ===
-                          _ginsengCard(),
-                          const SizedBox(height: 12),
-
-                          // وضع الحساب
-                          Align(
-                            alignment: Alignment.center,
-                            child: SegmentedButton<CalcMode>(
-                              segments: const [
-                                ButtonSegment(
-                                  value: CalcMode.byGrams,
-                                  label: Text(AppStrings.labelBasedOnWeight),
-                                  icon: Icon(Icons.scale),
-                                ),
-                                ButtonSegment(
-                                  value: CalcMode.byMoney,
-                                  label: Text(AppStrings.labelBasedOnAmount),
-                                  icon: Icon(Icons.payments_outlined),
-                                ),
-                              ],
-                              selected: {_mode},
-                              onSelectionChanged: _busy
-                                  ? null
-                                  : (s) {
-                                      setState(() {
-                                        _mode = s.first;
-                                        if (_showPad) {
-                                          if (_padTarget == _PadTarget.money &&
-                                              _mode != CalcMode.byMoney) {
-                                            _closePad();
-                                          }
-                                          if (_padTarget == _PadTarget.grams &&
-                                              _mode != CalcMode.byGrams) {
-                                            _closePad();
-                                          }
-                                        }
-                                      });
-                                    },
-                              showSelectedIcon: false,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // مدخلات الوزن/السعر
-                          if (_mode == CalcMode.byGrams) ...[
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Row(
-                                children: [
-                                  const Text(AppStrings.labelQuantityGrams),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: TextFormField(
-                                      controller: _gramsCtrl,
-                                      readOnly: true,
-                                      textAlign: TextAlign.center,
-                                      onTap: _busy
-                                          ? null
-                                          : () => _openPad(_PadTarget.grams),
-                                      decoration: const InputDecoration(
-                                        hintText: AppStrings.hintExample250,
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          vertical: 12,
-                                          horizontal: 10,
-                                        ),
-                                        border: OutlineInputBorder(),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ] else ...[
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Row(
-                                children: [
-                                  const Text(AppStrings.labelAmountEgp),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: TextFormField(
-                                      controller: _moneyCtrl,
-                                      readOnly: true,
-                                      textAlign: TextAlign.center,
-                                      onTap: _busy
-                                          ? null
-                                          : () => _openPad(_PadTarget.money),
-                                      decoration: const InputDecoration(
-                                        hintText: AppStrings.hintExample100,
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          vertical: 12,
-                                          horizontal: 10,
-                                        ),
-                                        border: OutlineInputBorder(),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                AppStrings.approxCalculatedGrams(_grams),
-                                style: const TextStyle(
-                                  color: Colors.black54,
-                                  fontSize: 20,
-                                ),
-                              ),
-                            ),
-                          ],
-
-                          const SizedBox(height: 12),
-                          _KVRow(
-                            k: AppStrings.labelPricePerKg,
-                            v: _sellPerKg,
-                            suffix: AppStrings.labelGramsShort,
-                          ),
-                          _KVRow(
-                            k: AppStrings.labelPricePerGram,
-                            v: _pricePerG,
-                            suffix: AppStrings.labelGramsShort,
-                          ),
-                          const SizedBox(height: 8),
-
-                          // الإجمالي
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.brown.shade50,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.brown.shade100),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  AppStrings.labelInvoiceTotal,
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                Text(
-                                  _totalPrice.toStringAsFixed(2),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          if (_fatal != null) ...[
-                            const SizedBox(height: 10),
-                            _WarningBox(text: _fatal!),
-                          ],
-
-                          // النومباد
-                          AnimatedSize(
-                            duration: const Duration(milliseconds: 160),
-                            curve: Curves.easeOut,
-                            child: _showPad
-                                ? _numPad(
-                                    allowDot: _padTarget == _PadTarget.money,
-                                  )
-                                : const SizedBox.shrink(),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: DialogActionRow(
-                        busy: _busy,
-                        onCancel: () => Navigator.pop(context),
-                        onConfirm: _commitSale,
-                        onConfirmLongPress:
-                            _canQuickConfirm ? _commitInstantInvoice : null,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    return _buildDialog(context);
   }
 
   @override
@@ -870,47 +332,3 @@ class _SingleDialogState extends State<SingleDialog> {
   }
 }
 
-class _KVRow extends StatelessWidget {
-  final String k;
-  final double v;
-  final String? suffix;
-  const _KVRow({required this.k, required this.v, this.suffix});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(k),
-        const Spacer(),
-        Text('${v.toStringAsFixed(2)}${suffix != null ? ' $suffix' : ''}'),
-      ],
-    );
-  }
-}
-
-class _WarningBox extends StatelessWidget {
-  final String text;
-  const _WarningBox({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange.shade200),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.warning_amber, color: Colors.orange),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(text, style: const TextStyle(color: Colors.orange)),
-          ),
-        ],
-      ),
-    );
-  }
-}

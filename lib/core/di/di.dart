@@ -5,6 +5,7 @@ import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/bloc/car
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/bloc/cashier_cubit.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/data/cashier_datasource.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/domain/cashier_repository.dart';
+import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
 import 'package:elfouad_coffee_beans/Presentation/features/sales/bloc/sales_history_cubit.dart';
 import 'package:elfouad_coffee_beans/data/repositories/sales_history_repository.dart';
 
@@ -25,6 +26,8 @@ void setupDi() {
   getIt.registerLazySingleton<SalesHistoryRepository>(
     () => SalesHistoryRepository(getIt<FirebaseFirestore>()),
   );
+
+  getIt.registerLazySingleton<CartCheckoutService>(() => CartCheckoutService());
 
   getIt.registerFactory<CartCubit>(() => CartCubit());
   getIt.registerFactory<CashierCubit>(() => CashierCubit());

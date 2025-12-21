@@ -2,13 +2,16 @@
 // ignore_for_file: unused_local_variable, unused_element
 
 import 'package:elfouad_coffee_beans/Presentation/features/cashier_page/viewmodel/cart_state.dart';
+import 'package:elfouad_coffee_beans/core/di/di.dart';
 import 'package:elfouad_coffee_beans/core/error/utils_error.dart';
 import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'dialogs/dialog_image_header.dart';
 import 'toggle_card.dart'; // الكارد المعاد استخدامه
 
-enum Serving { single, dbl }
+part 'drink_dialog_models.dart';
+part 'drink_dialog_checkout.dart';
+part 'drink_dialog_build.dart';
 
 class DrinkDialog extends StatefulWidget {
   final String drinkId;
@@ -28,21 +31,69 @@ class DrinkDialog extends StatefulWidget {
   State<DrinkDialog> createState() => _DrinkDialogState();
 }
 
-class _DrinkDialogState extends State<DrinkDialog> {
+abstract class _DrinkDialogStateBase extends State<DrinkDialog> {
+  bool get _busy;
+  set _busy(bool value);
+
+  String? get _fatal;
+  set _fatal(String? value);
+
+  int get _qty;
+  set _qty(int value);
+
+  bool get _canQuickConfirm;
+
+  Serving get _serving;
+  set _serving(Serving value);
+
+  bool get _isCoffeeMix;
+  String get _mix;
+  set _mix(String value);
+
+  bool get _spiced;
+  set _spiced(bool value);
+
+  bool get _isComplimentary;
+  set _isComplimentary(bool value);
+
+  String get _name;
+  String get _image;
+
+  bool get _supportsServingChoice;
+  bool get _isTurkish;
+  double get _displayUnitPrice;
+  double get _totalPrice;
+
+  CartLine _buildCartLine();
+  Future<void> _commitSale();
+  Future<void> _commitInstantInvoice();
+}
+
+class _DrinkDialogState extends _DrinkDialogStateBase
+    with _DrinkDialogCheckout, _DrinkDialogBuild {
+  @override
   bool _busy = false;
+  @override
   String? _fatal;
+  @override
   int _qty = 1;
+  @override
   bool get _canQuickConfirm => widget.onAddToCart != null;
 
   // Serving (سنجل/دوبل) للتركي/اسبريسو فقط
+  @override
   Serving _serving = Serving.single;
 
   // Coffee Mix (مياه/لبن)
+  @override
   bool get _isCoffeeMix => _name.trim() == 'كوفي ميكس';
+  @override
   String _mix = 'water'; // water | milk
 
   // ==== Spice option (Turkish only) ====
+  @override
   bool _spiced = false;
+  @override
   bool _isComplimentary = false;
 
   // --------- Utilities ---------
@@ -55,13 +106,16 @@ class _DrinkDialogState extends State<DrinkDialog> {
   }
 
   // --------- getters آمنة ---------
+  @override
   String get _name => (widget.drinkData['name'] ?? '').toString();
+  @override
   String get _image =>
       (widget.drinkData['image'] ?? 'assets/drinks.jpg').toString();
   String get _unit => (widget.drinkData['unit'] ?? 'cup').toString();
 
   double get _sellPriceBase => _numOf(widget.drinkData['sellPrice']);
 
+  @override
   bool get _isTurkish {
     final n = _norm(_name);
     return n == _norm('قهوة تركي');
@@ -92,6 +146,7 @@ class _DrinkDialogState extends State<DrinkDialog> {
   double get _doubleDiscount =>
       _numOf(widget.drinkData['doubleDiscount'], 10.0);
 
+  @override
   bool get _supportsServingChoice =>
       _norm(_name) == _norm('قهوة تركي') ||
       _norm(_name) == _norm('قهوة اسبريسو');
@@ -141,13 +196,16 @@ class _DrinkDialogState extends State<DrinkDialog> {
     return _doubleCostFallback;
   }
 
+  @override
   double get _totalPrice =>
       _isComplimentary ? 0.0 : _unitPriceEffective * _qty;
   double get _totalCost => _unitCostFinal * _qty;
+  @override
   double get _displayUnitPrice =>
       _isComplimentary ? 0.0 : _unitPriceEffective;
 
   /// يبني CartLine للمشروب
+  @override
   CartLine _buildCartLine() {
     if (_name.isEmpty) {
       throw Exception(AppStrings.errorProductNameMissing);
@@ -252,365 +310,9 @@ class _DrinkDialogState extends State<DrinkDialog> {
     );
   }
 
-  Future<void> _commitSale() async {
-    if (_name.isEmpty) {
-      setState(() => _fatal = AppStrings.errorProductNameMissing);
-      await showErrorDialog(context, _fatal!);
-      return;
-    }
-
-    setState(() => _busy = true);
-    try {
-      final line = _buildCartLine();
-      widget.onAddToCart?.call(line);
-      if (!mounted) return;
-      Navigator.pop(context, line);
-    } catch (e) {
-      if (mounted) {
-        setState(() => _fatal = AppStrings.errorUnexpected);
-        await showErrorDialog(context, e);
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _commitInstantInvoice() async {
-    if (!_canQuickConfirm || _busy) return;
-    setState(() {
-      _busy = true;
-      _fatal = null;
-    });
-    try {
-      final line = _buildCartLine();
-      final tempCart = CartState();
-      tempCart.addLine(line);
-      if (line.isComplimentary) {
-        tempCart.setInvoiceComplimentary(true);
-      }
-      await CartCheckout.commitInvoice(cart: tempCart);
-      if (!mounted) return;
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      Navigator.pop(context);
-      messenger?.showSnackBar(
-        const SnackBar(content: Text(AppStrings.dialogInvoiceCreated)),
-      );
-    } catch (e, st) {
-      logError(e, st);
-      if (mounted) await showErrorDialog(context, e, st);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final view = WidgetsBinding.instance.platformDispatcher.views.first;
-    final viewInsets = EdgeInsets.fromViewPadding(
-      view.viewInsets,
-      view.devicePixelRatio,
-    );
-    final bottomInset = viewInsets.bottom;
-
-    return MediaQuery(
-      data: MediaQuery.of(context).copyWith(viewInsets: viewInsets),
-      child: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: EdgeInsets.only(bottom: bottomInset + 12),
-        child: SafeArea(
-          child: Dialog(
-            insetPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 24,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.zero,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    DialogImageHeader(image: _image, title: _name),
-
-                    // Body
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          if (_supportsServingChoice) ...[
-                            Align(
-                              alignment: Alignment.center,
-                              child: SegmentedButton<Serving>(
-                                segments: const [
-                                  ButtonSegment(
-                                    value: Serving.single,
-                                    label: Text(AppStrings.labelSingles),
-                                    icon: Icon(Icons.coffee_outlined),
-                                  ),
-                                  ButtonSegment(
-                                    value: Serving.dbl,
-                                    label: Text(AppStrings.labelDouble),
-                                    icon: Icon(Icons.coffee),
-                                  ),
-                                ],
-                                selected: {_serving},
-                                onSelectionChanged: _busy
-                                    ? null
-                                    : (s) => setState(() => _serving = s.first),
-                                showSelectedIcon: false,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-
-                          if (_isCoffeeMix) ...[
-                            Align(
-                              alignment: Alignment.center,
-                              child: SegmentedButton<String>(
-                                segments: const [
-                                  ButtonSegment(
-                                    value: 'water',
-                                    label: Text(AppStrings.labelWater),
-                                    icon: Icon(Icons.water_drop_outlined),
-                                  ),
-                                  ButtonSegment(
-                                    value: 'milk',
-                                    label: Text(AppStrings.labelMilk),
-                                    icon: Icon(Icons.local_drink),
-                                  ),
-                                ],
-                                selected: {_mix},
-                                onSelectionChanged: _busy
-                                    ? null
-                                    : (s) => setState(() => _mix = s.first),
-                                showSelectedIcon: false,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-
-                          // === Toggles row (????? ??? ??????) ===
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ToggleCard(
-                                  title: AppStrings.labelHospitality,
-                                  value: _isComplimentary,
-                                  busy: _busy,
-                                  onChanged: (v) =>
-                                      setState(() => _isComplimentary = v),
-                                  leadingIcon: Icons.card_giftcard,
-                                ),
-                              ),
-                              if (_isTurkish) ...[
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: ToggleCard(
-                                    title: AppStrings.labelSpiced,
-                                    value: _spiced,
-                                    busy: _busy,
-                                    onChanged: (v) =>
-                                        setState(() => _spiced = v),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-
-                          // سعر الكوب
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                AppStrings.labelCupPrice,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Text(
-                                '${_displayUnitPrice.toStringAsFixed(2)} ${AppStrings.labelGramsShort}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Quantity stepper
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton.filledTonal(
-                                onPressed: _busy
-                                    ? null
-                                    : () {
-                                        if (_qty > 1) {
-                                          setState(() => _qty -= 1);
-                                        }
-                                      },
-                                icon: const Icon(Icons.remove),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                child: Text(
-                                  '$_qty',
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              IconButton.filledTonal(
-                                onPressed: _busy
-                                    ? null
-                                    : () => setState(() => _qty += 1),
-                                icon: const Icon(Icons.add),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // إجمالي السعر
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.brown.shade50,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.brown.shade100),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  AppStrings.labelInvoiceTotal,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                Text(
-                                  _totalPrice.toStringAsFixed(2),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          if (_fatal != null) ...[
-                            const SizedBox(height: 10),
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.orange.shade200,
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.warning_amber,
-                                    color: Colors.orange,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _fatal!,
-                                      style: const TextStyle(
-                                        color: Colors.orange,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () => Navigator.pop(context),
-                              child: const Text(
-                                AppStrings.dialogCancel,
-                                style: TextStyle(
-                                  color: Color(0xFF543824),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton(
-                              style: ButtonStyle(
-                                backgroundColor: WidgetStateProperty.all(
-                                  const Color(0xFF543824),
-                                ),
-                              ),
-                              onPressed: _busy ? null : _commitSale,
-                              onLongPress: _busy || !_canQuickConfirm
-                                  ? null
-                                  : _commitInstantInvoice,
-                              child: _busy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text(
-                                      AppStrings.dialogConfirm,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    return _buildDialog(context);
   }
-}
 
+}

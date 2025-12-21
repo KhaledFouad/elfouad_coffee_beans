@@ -216,7 +216,7 @@ class _PosShellState extends State<_PosShell> {
     final cartCubit = context.read<CartCubit>();
     setState(() => _checkingOut = true);
     try {
-      await CartCheckout.commitInvoice(cart: cart);
+      await getIt<CartCheckoutService>().commitInvoice(cart: cart);
       cartCubit.clear();
       _noteCtrl.clear();
     } catch (e, st) {
