@@ -134,6 +134,12 @@ class _TitleRow extends StatelessWidget {
         if (record.isDeferred && !record.isPaid) DeferredBadge(note: record.note),
         if (record.isDeferred && record.isPaid)
           _Chip(
+            label: AppStrings.labelDeferredPast,
+            border: Colors.orange.shade200,
+            fill: Colors.orange.shade50,
+          ),
+        if (record.isDeferred && record.isPaid)
+          _Chip(
             label: AppStrings.labelPaid,
             border: Colors.green.shade200,
             fill: Colors.green.shade50,

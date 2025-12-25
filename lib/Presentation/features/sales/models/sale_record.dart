@@ -45,7 +45,8 @@ class SaleRecord {
 
   String get titleLine => buildTitleLine(data, type);
 
-  String get displayTime => formatTime(effectiveTime);
+  String get displayTime =>
+      (isDeferred && isPaid) ? formatTime(createdAt) : formatTime(effectiveTime);
 
   String get originalDateTimeLabel => formatDateTime(createdAt);
 

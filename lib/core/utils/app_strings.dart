@@ -161,6 +161,7 @@ class AppStrings {
   static const String labelGinseng = 'جينسنج';
   static const String labelHospitality = 'ضيافة';
   static const String labelPaid = 'مدفوع';
+  static const String labelDeferredPast = 'أجل من يوم سابق';
   static const String labelOperation = 'فاتورة';
   static const String labelCustomBlendSingle = 'توليفة العميل';
   static const String labelCustomBlendTitle = 'عنوان التوليفة';

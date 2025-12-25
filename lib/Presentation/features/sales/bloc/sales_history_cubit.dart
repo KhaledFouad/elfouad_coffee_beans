@@ -194,9 +194,11 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
 
     final filtered = <SaleRecord>[];
     for (final record in records) {
-      if (record.isDeferred) continue;
       final effective = record.effectiveTime;
-      if (inRange(effective)) {
+      final include =
+          (!record.isDeferred && inRange(effective)) ||
+          (record.isDeferred && record.isPaid && inRange(effective));
+      if (include) {
         filtered.add(record);
       }
     }
@@ -246,7 +248,7 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
   double _sumPaidOnly(List<SaleRecord> entries) {
     double sum = 0;
     for (final entry in entries) {
-      if (!entry.isComplimentary && entry.isPaid && !entry.isDeferred) {
+      if (!entry.isComplimentary && entry.isPaid) {
         sum += entry.totalPrice;
       }
     }
