@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/sale_record.dart';
 import '../models/sales_day_group.dart';
+import '../models/credit_account.dart';
 import '../utils/sale_utils.dart';
 
 class SalesHistoryState extends Equatable {
@@ -17,6 +18,8 @@ class SalesHistoryState extends Equatable {
     required this.isLoadingMore,
     required this.hasMore,
     required this.isRangeTotalLoading,
+    required this.creditAccounts,
+    required this.isCreditLoading,
     this.customRange,
   });
 
@@ -29,6 +32,8 @@ class SalesHistoryState extends Equatable {
         isLoadingMore: false,
         hasMore: true,
         isRangeTotalLoading: true,
+        creditAccounts: const [],
+        isCreditLoading: false,
         customRange: null,
       );
 
@@ -40,6 +45,8 @@ class SalesHistoryState extends Equatable {
   final bool isLoadingMore;
   final bool hasMore;
   final bool isRangeTotalLoading;
+  final List<CreditCustomerAccount> creditAccounts;
+  final bool isCreditLoading;
   final DateTimeRange? customRange;
 
   bool get isEmpty => allRecords.isEmpty;
@@ -54,6 +61,8 @@ class SalesHistoryState extends Equatable {
     bool? isLoadingMore,
     bool? hasMore,
     bool? isRangeTotalLoading,
+    List<CreditCustomerAccount>? creditAccounts,
+    bool? isCreditLoading,
     Object? customRange = _unset,
   }) {
     return SalesHistoryState(
@@ -66,6 +75,8 @@ class SalesHistoryState extends Equatable {
       hasMore: hasMore ?? this.hasMore,
       isRangeTotalLoading:
           isRangeTotalLoading ?? this.isRangeTotalLoading,
+      creditAccounts: creditAccounts ?? this.creditAccounts,
+      isCreditLoading: isCreditLoading ?? this.isCreditLoading,
       customRange: identical(customRange, _unset)
           ? this.customRange
           : customRange as DateTimeRange?,
@@ -82,6 +93,8 @@ class SalesHistoryState extends Equatable {
         isLoadingMore,
         hasMore,
         isRangeTotalLoading,
+        creditAccounts,
+        isCreditLoading,
         customRange,
       ];
 }

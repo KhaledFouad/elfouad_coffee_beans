@@ -49,5 +49,16 @@ class SaleRecord {
 
   String get originalDateTimeLabel => formatDateTime(createdAt);
 
-  bool get canSettle => isDeferred && !isPaid && dueAmount > 0;
+  bool get canSettle => isDeferred && !isPaid && outstandingAmount > 0;
+
+  double get outstandingAmount {
+    if (dueAmount > 0) {
+      if (totalPrice > 0 && dueAmount > totalPrice) {
+        return totalPrice;
+      }
+      return dueAmount;
+    }
+    if (isDeferred && !isPaid) return totalPrice;
+    return 0.0;
+  }
 }

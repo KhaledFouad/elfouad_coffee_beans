@@ -136,14 +136,16 @@ class SalesHistoryRepository {
       }
 
       final data = snapshot.data() as Map<String, dynamic>;
-      final bool isDeferred = data['is_deferred'] == true;
-      final double dueAmount = _parseDouble(data['due_amount']);
+      final bool isDeferred =
+          data['is_deferred'] == true || data['is_credit'] == true;
+      final double dueAmount = _resolveDueAmount(data);
 
       if (!isDeferred || dueAmount <= 0) {
         throw Exception('Not a valid deferred sale.');
       }
 
       final double totalCost = _parseDouble(data['total_cost']);
+      final double totalPrice = _parseDouble(data['total_price']);
 
       final components = (data['components'] as List?)
           ?.map((e) => (e as Map).cast<String, dynamic>())
@@ -164,13 +166,11 @@ class SalesHistoryRepository {
         transaction.update(ref, {'components': components});
       }
 
-      final newTotalPrice = dueAmount;
-      final newProfit = newTotalPrice - totalCost;
+      final newProfit = totalPrice - totalCost;
 
       transaction.update(ref, {
-        'total_price': newTotalPrice,
         'profit_total': newProfit,
-        'is_deferred': false,
+        'is_deferred': true,
         'paid': true,
         'due_amount': 0.0,
         'settled_at': FieldValue.serverTimestamp(),
@@ -178,9 +178,155 @@ class SalesHistoryRepository {
     });
   }
 
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  fetchCreditSales() async {
+    final deferredFuture = _firestore
+        .collection('sales')
+        .where('is_deferred', isEqualTo: true)
+        .get();
+
+    final creditFuture = _firestore
+        .collection('sales')
+        .where('is_credit', isEqualTo: true)
+        .get();
+
+    final settledFuture = _firestore
+        .collection('sales')
+        .where('settled_at', isNull: false)
+        .get();
+
+    final results = await Future.wait(
+      [deferredFuture, creditFuture, settledFuture],
+    );
+    final deferredSnap = results[0];
+    final creditSnap = results[1];
+    final settledSnap = results[2];
+
+    final combined = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final doc in deferredSnap.docs) {
+      combined[doc.id] = doc;
+    }
+    for (final doc in creditSnap.docs) {
+      combined[doc.id] = doc;
+    }
+    for (final doc in settledSnap.docs) {
+      combined[doc.id] = doc;
+    }
+
+    return combined.values.toList();
+  }
+
+  Future<List<String>> fetchCreditCustomerNames() async {
+    final docs = await fetchCreditSales();
+    final names = <String>{};
+    for (final doc in docs) {
+      final name = (doc.data()['note'] ?? '').toString().trim();
+      if (name.isNotEmpty) {
+        names.add(name);
+      }
+    }
+    final sorted = names.toList()..sort();
+    return sorted;
+  }
+
+  Future<void> applyCreditPayment({
+    required String customerName,
+    required double amount,
+  }) async {
+    final name = customerName.trim();
+    if (name.isEmpty) {
+      throw Exception('Customer name is required.');
+    }
+    if (!amount.isFinite || amount <= 0) {
+      throw Exception('Invalid payment amount.');
+    }
+
+    final deferredFuture = _firestore
+        .collection('sales')
+        .where('note', isEqualTo: name)
+        .where('is_deferred', isEqualTo: true)
+        .where('paid', isEqualTo: false)
+        .get();
+
+    final creditFuture = _firestore
+        .collection('sales')
+        .where('note', isEqualTo: name)
+        .where('is_credit', isEqualTo: true)
+        .where('paid', isEqualTo: false)
+        .get();
+
+    final results = await Future.wait([deferredFuture, creditFuture]);
+    final deferredSnap = results[0];
+    final creditSnap = results[1];
+
+    final combined =
+        <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final doc in deferredSnap.docs) {
+      combined[doc.id] = doc;
+    }
+    for (final doc in creditSnap.docs) {
+      combined[doc.id] = doc;
+    }
+
+    if (combined.isEmpty) {
+      return;
+    }
+
+    final docs = combined.values.toList()
+      ..sort((a, b) => _createdAtOf(a).compareTo(_createdAtOf(b)));
+
+    await _firestore.runTransaction((transaction) async {
+      var remaining = amount;
+
+      for (final doc in docs) {
+        if (remaining <= 0) break;
+        final liveSnap = await transaction.get(doc.reference);
+        if (!liveSnap.exists) continue;
+        final data = liveSnap.data() as Map<String, dynamic>;
+        final dueAmount = _resolveDueAmount(data);
+        if (dueAmount <= 0) continue;
+
+        if (remaining >= dueAmount) {
+          remaining -= dueAmount;
+          transaction.update(doc.reference, {
+            'is_deferred': true,
+            'paid': true,
+            'due_amount': 0.0,
+            'settled_at': FieldValue.serverTimestamp(),
+          });
+        } else {
+          final newDue = dueAmount - remaining;
+          remaining = 0;
+          transaction.update(doc.reference, {
+            'is_deferred': true,
+            'paid': false,
+            'due_amount': newDue,
+          });
+        }
+      }
+    });
+  }
+
   double _parseDouble(dynamic value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '0') ?? 0;
+  }
+
+  double _resolveDueAmount(Map<String, dynamic> data) {
+    final raw = data['due_amount'];
+    final dueAmount = _parseDouble(raw);
+    final totalPrice = _parseDouble(data['total_price']);
+    if (dueAmount > 0) {
+      if (totalPrice > 0 && dueAmount > totalPrice) {
+        return totalPrice;
+      }
+      return dueAmount;
+    }
+    if ((data['is_deferred'] == true || data['is_credit'] == true) &&
+        data['paid'] != true) {
+      return totalPrice;
+    }
+    return 0;
   }
 
   DateTime _createdAtOf(QueryDocumentSnapshot<Map<String, dynamic>> doc) {

@@ -11,6 +11,7 @@ class _ArabicKeyboardDialog extends StatelessWidget {
   final String hint;
   final int minLines;
   final int maxLines;
+  final Future<List<String>> suggestionsFuture;
 
   const _ArabicKeyboardDialog({
     required this.controller,
@@ -23,6 +24,7 @@ class _ArabicKeyboardDialog extends StatelessWidget {
     required this.hint,
     required this.minLines,
     required this.maxLines,
+    required this.suggestionsFuture,
   });
 
   @override
@@ -72,6 +74,50 @@ class _ArabicKeyboardDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              FutureBuilder<List<String>>(
+                future: suggestionsFuture,
+                builder: (context, snapshot) {
+                  final suggestions = snapshot.data ?? const [];
+                  if (suggestions.isEmpty) {
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const SizedBox(
+                        height: 24,
+                        child: Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }
+
+                  return SizedBox(
+                    height: 48,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: suggestions.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final name = suggestions[index].trim();
+                        if (name.isEmpty) return const SizedBox.shrink();
+                        return _SuggestionCard(
+                          name: name,
+                          onTap: () {
+                            controller.value = TextEditingValue(
+                              text: name,
+                              selection: TextSelection.collapsed(
+                                offset: name.length,
+                              ),
+                            );
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
               _ArabicKeyboard(
                 onChar: onChar,
                 onSpace: onSpace,
@@ -107,6 +153,38 @@ class _ArabicKeyboardDialog extends StatelessWidget {
                 ],
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionCard extends StatelessWidget {
+  const _SuggestionCard({required this.name, required this.onTap});
+
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.brown.shade200),
+          ),
+          child: Center(
+            child: Text(
+              name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ),

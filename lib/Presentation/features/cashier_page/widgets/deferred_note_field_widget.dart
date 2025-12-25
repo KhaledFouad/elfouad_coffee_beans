@@ -55,6 +55,7 @@ class _DeferredNoteFieldState extends State<DeferredNoteField> {
     if (kIsWeb) {
       _focusNode.requestFocus();
     }
+    final suggestionsFuture = _loadSuggestions();
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -71,6 +72,7 @@ class _DeferredNoteFieldState extends State<DeferredNoteField> {
           hint: widget.hint,
           minLines: widget.minLines,
           maxLines: widget.maxLines,
+          suggestionsFuture: suggestionsFuture,
         );
       },
     );
@@ -132,6 +134,18 @@ class _DeferredNoteFieldState extends State<DeferredNoteField> {
       text: '',
       selection: TextSelection.collapsed(offset: 0),
     );
+  }
+
+  Future<List<String>> _loadSuggestions() async {
+    try {
+      if (!getIt.isRegistered<SalesHistoryRepository>()) {
+        return const [];
+      }
+      return await getIt<SalesHistoryRepository>()
+          .fetchCreditCustomerNames();
+    } catch (_) {
+      return const [];
+    }
   }
 
   @override

@@ -7,13 +7,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../data/repositories/sales_history_repository.dart';
 import '../models/sale_record.dart';
 import '../models/sales_day_group.dart';
+import '../models/credit_account.dart';
 import '../utils/sale_utils.dart';
 import 'sales_history_state.dart';
 
 class SalesHistoryCubit extends Cubit<SalesHistoryState> {
   SalesHistoryCubit({required SalesHistoryRepository repository})
-      : _repository = repository,
-        super(SalesHistoryState.initial());
+    : _repository = repository,
+      super(SalesHistoryState.initial());
 
   final SalesHistoryRepository _repository;
 
@@ -57,12 +58,7 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
 
   Future<void> setRange(DateTimeRange? range) async {
     final resolved = range ?? defaultSalesRange();
-    emit(
-      state.copyWith(
-        customRange: range,
-        range: resolved,
-      ),
-    );
+    emit(state.copyWith(customRange: range, range: resolved));
     await _loadFirstPage();
   }
 
@@ -88,6 +84,25 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
   Future<void> settleDeferredSale(String saleId) async {
     await _repository.settleDeferredSale(saleId);
     await _loadFirstPage();
+    unawaited(_loadCreditAccounts());
+  }
+
+  Future<void> applyCreditPayment({
+    required String customerName,
+    required double amount,
+  }) async {
+    await _repository.applyCreditPayment(
+      customerName: customerName,
+      amount: amount,
+    );
+    await _loadFirstPage();
+    unawaited(_loadCreditAccounts());
+  }
+
+  Future<void> loadCreditAccounts({bool force = false}) async {
+    if (state.isCreditLoading) return;
+    if (!force && state.creditAccounts.isNotEmpty) return;
+    await _loadCreditAccounts();
   }
 
   Future<void> _loadFirstPage() async {
@@ -120,6 +135,18 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
     );
 
     unawaited(_loadFullTotalsPerDay(range));
+  }
+
+  Future<void> _loadCreditAccounts() async {
+    emit(state.copyWith(isCreditLoading: true));
+    try {
+      final docs = await _repository.fetchCreditSales();
+      final records = docs.map(SaleRecord.new).toList();
+      final accounts = _buildCreditAccounts(records);
+      emit(state.copyWith(creditAccounts: accounts, isCreditLoading: false));
+    } catch (_) {
+      emit(state.copyWith(isCreditLoading: false));
+    }
   }
 
   Future<void> _loadFullTotalsPerDay(DateTimeRange range) async {
@@ -167,9 +194,9 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
 
     final filtered = <SaleRecord>[];
     for (final record in records) {
+      if (record.isDeferred) continue;
       final effective = record.effectiveTime;
-      final include = (record.isDeferred && !record.isPaid) || inRange(effective);
-      if (include) {
+      if (inRange(effective)) {
         filtered.add(record);
       }
     }
@@ -192,10 +219,34 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
     }).toList();
   }
 
+  List<CreditCustomerAccount> _buildCreditAccounts(List<SaleRecord> records) {
+    final Map<String, List<SaleRecord>> grouped = {};
+
+    for (final record in records) {
+      final name = record.note.trim();
+      if (name.isEmpty) continue;
+      grouped.putIfAbsent(name, () => <SaleRecord>[]).add(record);
+    }
+
+    final accounts = grouped.entries.map((entry) {
+      final sales = List<SaleRecord>.from(entry.value)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return CreditCustomerAccount(name: entry.key, sales: sales);
+    }).toList();
+
+    accounts.sort((a, b) {
+      final owedCompare = b.totalOwed.compareTo(a.totalOwed);
+      if (owedCompare != 0) return owedCompare;
+      return a.name.compareTo(b.name);
+    });
+
+    return accounts;
+  }
+
   double _sumPaidOnly(List<SaleRecord> entries) {
     double sum = 0;
     for (final entry in entries) {
-      if (!entry.isComplimentary && entry.isPaid) {
+      if (!entry.isComplimentary && entry.isPaid && !entry.isDeferred) {
         sum += entry.totalPrice;
       }
     }

@@ -314,7 +314,11 @@ class _SettleButton extends StatelessWidget {
           builder: (_) => AlertDialog(
             title: const Text(AppStrings.dialogConfirmPayment),
             content: Text(
-              AppStrings.confirmSettleAmount(record.totalPrice),
+              AppStrings.confirmSettleAmount(
+                record.outstandingAmount > 0
+                    ? record.outstandingAmount
+                    : record.totalPrice,
+              ),
             ),
             actions: [
               TextButton(

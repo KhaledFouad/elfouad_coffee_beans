@@ -6,6 +6,8 @@ import 'package:responsive_framework/responsive_framework.dart';
 
 import '../../../../core/di/di.dart';
 import '../bloc/sales_history_cubit.dart';
+import '../bloc/sales_history_state.dart';
+import 'credit_accounts_page.dart';
 import '../widgets/history_day_section.dart';
 import '../utils/sale_utils.dart';
 
@@ -40,49 +42,71 @@ class _SalesHistoryView extends StatelessWidget {
       horizontalPadding,
       24,
     );
+    final showInitialLoading =
+        state.isLoadingFirst && state.isEmpty && state.creditAccounts.isEmpty;
+    final noHistoryLabel =
+        state.isFiltered ? AppStrings.labelNoSalesInRange : AppStrings.labelNoSales;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: _HistoryAppBar(cubit: cubit),
-        body: state.isEmpty && state.isLoadingFirst
+        floatingActionButton: _CreditFab(
+          count: _creditUnpaidCount(state),
+          isLoading: state.isCreditLoading,
+          onTap: () {
+            final cubit = context.read<SalesHistoryCubit>();
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => BlocProvider.value(
+                  value: cubit,
+                  child: const CreditAccountsPage(),
+                ),
+              ),
+            );
+          },
+        ),
+        body: showInitialLoading
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 children: [
                   Expanded(
-                    child: state.isEmpty
-                        ? const Center(child: Text(AppStrings.labelNoSales))
-                        : Align(
-                            alignment: Alignment.topCenter,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: contentMaxWidth,
-                              ),
-                              child: ListView.builder(
-                                padding: listPadding,
-                                itemCount: state.groups.length,
-                                itemBuilder: (context, index) {
-                                  final group = state.groups[index];
-
-                                  // ??? ????? ???????? ??????? ????? ?? ?? ?????
-                                  final overrideTotal =
-                                      state.fullTotalsByDay[group.label];
-                                  final showLoading =
-                                      state.isRangeTotalLoading &&
-                                      overrideTotal == null;
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: HistoryDaySection(
-                                      group: group,
-                                      overrideTotal: overrideTotal,
-                                      showTotalLoading: showLoading,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: contentMaxWidth,
+                        ),
+                        child: ListView(
+                          padding: listPadding,
+                          children: [
+                            if (state.groups.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 20,
+                                ),
+                                child: Center(child: Text(noHistoryLabel)),
+                              )
+                            else
+                              ...state.groups.map((group) {
+                                final overrideTotal =
+                                    state.fullTotalsByDay[group.label];
+                                final showLoading =
+                                    state.isRangeTotalLoading &&
+                                    overrideTotal == null;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: HistoryDaySection(
+                                    group: group,
+                                    overrideTotal: overrideTotal,
+                                    showTotalLoading: showLoading,
+                                  ),
+                                );
+                              }),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                   if (state.isLoadingMore)
                     const Padding(
@@ -207,6 +231,89 @@ class _HistoryAppBar extends StatelessWidget implements PreferredSizeWidget {
       final normalized = cubit.normalizePickerRange(picked);
       await cubit.setRange(normalized);
     }
+  }
+}
+
+int _creditUnpaidCount(SalesHistoryState state) {
+  int total = 0;
+  for (final account in state.creditAccounts) {
+    total += account.unpaidCount;
+  }
+  return total;
+}
+
+class _CreditFab extends StatelessWidget {
+  const _CreditFab({
+    required this.count,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  final int count;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        FloatingActionButton.extended(
+          onPressed: onTap,
+          icon: const Icon(Icons.account_balance_wallet_rounded),
+          label: const Text(AppStrings.titleCreditAccounts),
+        ),
+        if (count > 0 || isLoading)
+          Positioned(
+            top: -4,
+            right: -4,
+            child: _CreditBadge(count: count, isLoading: isLoading),
+          ),
+      ],
+    );
+  }
+}
+
+class _CreditBadge extends StatelessWidget {
+  const _CreditBadge({required this.count, required this.isLoading});
+
+  final int count;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = count > 0 ? Colors.orange.shade700 : Colors.grey.shade400;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: isLoading
+          ? const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Text(
+              count.toString(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+    );
   }
 }
 

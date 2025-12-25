@@ -27,11 +27,12 @@ class AppStrings {
     if (clean.isEmpty) return 'هل تريد حذف هذه الخلطة؟';
     return 'هل تريد حذف خلطة $clean؟';
   }
+
   static String deferredSettleFailed(Object error) => 'تعذر التسوية: $error';
 
   // === أزرار عامة بالإنجليزي (في بعض الشاشات) ===
-  static const String btnSellEn = 'Sell';
-  static const String btnCancelEn = 'Cancel';
+  static const String btnSellEn = 'بيع';
+  static const String btnCancelEn = 'إلغاء';
   static const String btnLoadMore = 'عرض المزيد';
 
   // === نصوص شاشة الكاشير / النقطة ===
@@ -187,6 +188,28 @@ class AppStrings {
   static const String labelSales = 'مبيعات';
   static const String labelNoSales = 'لا يوجد عمليات بيع';
   static const String labelNoSalesInRange = 'لا يوجد عمليات في هذا النطاق';
+  static const String titleCreditAccounts = 'حسابات مؤجلة';
+  static const String labelNoCreditAccounts = 'لا توجد حسابات مؤجلة بعد.';
+  static const String labelNoCreditSalesForCustomer =
+      'لا توجد مبيعات مؤجلة لهذا العميل.';
+  static const String labelTotalOwed = 'المبلغ المستحق';
+  static const String labelUnpaid = 'غير مدفوع';
+  static const String labelSaleDate = 'تاريخ البيع';
+  static const String labelPaidAt = 'مدفوع في';
+  static const String labelAmountDue = 'المبلغ المستحق';
+  static const String btnPaySale = 'دفع المبلغ';
+  static const String btnPayAmount = 'دفع جزء من المستحق';
+  static const String dialogPayAmountTitle = 'دفع المبلغ';
+  static const String errorEnterValidAmount = 'أدخل مبلغًا صحيحًا.';
+  static const String creditPaymentExceedsTotal =
+      'المبلغ يتجاوز المبلغ المستحق؛ سيتم تطبيق المبلغ المتبقي فقط.';
+
+  static const String dialogDeleteCreditAccountTitle = 'حذف حساب الأجل';
+  static String confirmDeleteCreditAccount(String name) =>
+      'سيتم حذف حساب $name وكل عمليات الأجل الخاصة به. هل تريد المتابعة؟';
+  static const String creditAccountDeleted = 'تم حذف حساب الأجل.';
+  static String creditDeleteFailed(Object error) =>
+      'تعذر حذف حساب الأجل: $error';
 
   static String salesAmount(num value) => 'مبيعات: ${value.toStringAsFixed(2)}';
 
@@ -202,8 +225,8 @@ class AppStrings {
   static const String labelSingleItem = 'صنف منفرد';
   static const String labelExtra = 'سناكس';
   static const String labelGramsUnit = 'جم';
-  static const String labelCupUnit = 'cup';
-  static const String labelPieceUnitEn = 'piece';
+  static const String labelCupUnit = 'كوب';
+  static const String labelPieceUnitEn = 'قطعة';
 
   static String priceLine(num value) => 'س:${value.toStringAsFixed(2)}';
   static String saleTitleDrink(String quantity, String name) =>
