@@ -164,9 +164,11 @@ class SalesHistoryRepository {
           }
         }
         transaction.update(ref, {'components': components});
-      }
+      
 
       final newProfit = totalPrice - totalCost;
+      final now = Timestamp.now();
+      final paymentEvents = _appendPaymentEvent(data, dueAmount, now);
 
       transaction.update(ref, {
         'profit_total': newProfit,
@@ -174,6 +176,9 @@ class SalesHistoryRepository {
         'paid': true,
         'due_amount': 0.0,
         'settled_at': FieldValue.serverTimestamp(),
+        'last_payment_at': now,
+        'last_payment_amount': dueAmount,
+        'payment_events': paymentEvents,
       });
     });
   }
@@ -227,6 +232,79 @@ class SalesHistoryRepository {
     }
     final sorted = names.toList()..sort();
     return sorted;
+  }
+
+  Future<int> fetchUnpaidCreditCount() async {
+    final deferredFuture = _firestore
+        .collection('sales')
+        .where('is_deferred', isEqualTo: true)
+        .where('paid', isEqualTo: false)
+        .count()
+        .get();
+
+    final creditFuture = _firestore
+        .collection('sales')
+        .where('is_credit', isEqualTo: true)
+        .where('paid', isEqualTo: false)
+        .count()
+        .get();
+
+    final results = await Future.wait([deferredFuture, creditFuture]);
+    final deferredCount = results[0].count ?? 0;
+    final creditCount = results[1].count ?? 0;
+    return deferredCount + creditCount;
+  }
+
+  Future<void> deleteCreditCustomer(String customerName) async {
+    final name = customerName.trim();
+    if (name.isEmpty) {
+      throw Exception('Customer name is required.');
+    }
+
+    final deferredFuture = _firestore
+        .collection('sales')
+        .where('note', isEqualTo: name)
+        .where('is_deferred', isEqualTo: true)
+        .get();
+
+    final creditFuture = _firestore
+        .collection('sales')
+        .where('note', isEqualTo: name)
+        .where('is_credit', isEqualTo: true)
+        .get();
+
+    final results = await Future.wait([deferredFuture, creditFuture]);
+    final deferredSnap = results[0];
+    final creditSnap = results[1];
+
+    final combined =
+        <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final doc in deferredSnap.docs) {
+      combined[doc.id] = doc;
+    }
+    for (final doc in creditSnap.docs) {
+      combined[doc.id] = doc;
+    }
+
+    if (combined.isEmpty) {
+      return;
+    }
+
+    const batchLimit = 400;
+    var batch = _firestore.batch();
+    var opCount = 0;
+    for (final doc in combined.values) {
+      batch.delete(doc.reference);
+      opCount++;
+      if (opCount >= batchLimit) {
+        await batch.commit();
+        batch = _firestore.batch();
+        opCount = 0;
+      }
+    }
+    if (opCount > 0) {
+      await batch.commit();
+    }
   }
 
   Future<void> applyCreditPayment({
@@ -286,25 +364,44 @@ class SalesHistoryRepository {
         final dueAmount = _resolveDueAmount(data);
         if (dueAmount <= 0) continue;
 
-        if (remaining >= dueAmount) {
-          remaining -= dueAmount;
-          transaction.update(doc.reference, {
-            'is_deferred': true,
-            'paid': true,
-            'due_amount': 0.0,
-            'settled_at': FieldValue.serverTimestamp(),
-          });
-        } else {
-          final newDue = dueAmount - remaining;
-          remaining = 0;
-          transaction.update(doc.reference, {
-            'is_deferred': true,
-            'paid': false,
-            'due_amount': newDue,
-          });
-        }
+        final applied = remaining >= dueAmount ? dueAmount : remaining;
+        if (applied <= 0) continue;
+
+        final totalPrice = _parseDouble(data['total_price']);
+        final newDue =
+            (dueAmount - applied).clamp(0.0, totalPrice).toDouble();
+        final isPaid = newDue <= 0;
+        final now = Timestamp.now();
+        final paymentEvents = _appendPaymentEvent(data, applied, now);
+
+        remaining -= applied;
+
+        transaction.update(doc.reference, {
+          'is_deferred': true,
+          'paid': isPaid,
+          'due_amount': newDue,
+          if (isPaid) 'settled_at': FieldValue.serverTimestamp(),
+          'last_payment_at': now,
+          'last_payment_amount': applied,
+          'payment_events': paymentEvents,
+        });
       }
     });
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  fetchPaymentEventsForRange({
+    required DateTimeRange range,
+  }) async {
+    final snap = await _firestore
+        .collection('sales')
+        .where(
+          'last_payment_at',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+        )
+        .where('last_payment_at', isLessThan: Timestamp.fromDate(range.end))
+        .get();
+    return snap.docs;
   }
 
   double _parseDouble(dynamic value) {
@@ -327,6 +424,27 @@ class SalesHistoryRepository {
       return totalPrice;
     }
     return 0;
+  }
+
+  List<Map<String, dynamic>> _appendPaymentEvent(
+    Map<String, dynamic> data,
+    double amount,
+    Timestamp at,
+  ) {
+    final raw = data['payment_events'];
+    final List<Map<String, dynamic>> existing = [];
+    if (raw is List) {
+      for (final entry in raw) {
+        if (entry is Map) {
+          existing.add(entry.cast<String, dynamic>());
+        }
+      }
+    }
+    existing.add({
+      'amount': amount,
+      'at': at,
+    });
+    return existing;
   }
 
   DateTime _createdAtOf(QueryDocumentSnapshot<Map<String, dynamic>> doc) {

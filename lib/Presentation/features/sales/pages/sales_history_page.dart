@@ -6,7 +6,6 @@ import 'package:responsive_framework/responsive_framework.dart';
 
 import '../../../../core/di/di.dart';
 import '../bloc/sales_history_cubit.dart';
-import '../bloc/sales_history_state.dart';
 import 'credit_accounts_page.dart';
 import '../widgets/history_day_section.dart';
 import '../utils/sale_utils.dart';
@@ -52,8 +51,8 @@ class _SalesHistoryView extends StatelessWidget {
       child: Scaffold(
         appBar: _HistoryAppBar(cubit: cubit),
         floatingActionButton: _CreditFab(
-          count: _creditUnpaidCount(state),
-          isLoading: state.isCreditLoading,
+          count: state.creditUnpaidCount,
+          isLoading: state.isCreditCountLoading,
           onTap: () {
             final cubit = context.read<SalesHistoryCubit>();
             Navigator.of(context).push(
@@ -232,14 +231,6 @@ class _HistoryAppBar extends StatelessWidget implements PreferredSizeWidget {
       await cubit.setRange(normalized);
     }
   }
-}
-
-int _creditUnpaidCount(SalesHistoryState state) {
-  int total = 0;
-  for (final account in state.creditAccounts) {
-    total += account.unpaidCount;
-  }
-  return total;
 }
 
 class _CreditFab extends StatelessWidget {

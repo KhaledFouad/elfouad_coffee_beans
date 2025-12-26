@@ -24,7 +24,7 @@ mixin _BlendDialogComponents on _BlendDialogStateBase {
                 _busy
                     ? null
                     : () => setState(() {
-                      _ginsengGrams = (_ginsengGrams - 5).clamp(0, 1000000);
+                      _ginsengGrams = (_ginsengGrams - 1).clamp(0, 1000000);
                     }),
             icon: const Icon(Icons.remove),
           ),
@@ -40,7 +40,7 @@ mixin _BlendDialogComponents on _BlendDialogStateBase {
                 _busy
                     ? null
                     : () => setState(() {
-                      _ginsengGrams = (_ginsengGrams + 5).clamp(0, 1000000);
+                      _ginsengGrams = (_ginsengGrams + 1).clamp(0, 1000000);
                     }),
             icon: const Icon(Icons.add),
           ),

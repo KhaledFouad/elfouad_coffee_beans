@@ -21,6 +21,7 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
   QueryDocumentSnapshot<Map<String, dynamic>>? _lastDoc;
 
   Future<void> initialize() async {
+    unawaited(_loadCreditUnpaidCount());
     await _loadFirstPage();
   }
 
@@ -84,6 +85,7 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
   Future<void> settleDeferredSale(String saleId) async {
     await _repository.settleDeferredSale(saleId);
     await _loadFirstPage();
+    unawaited(_loadCreditUnpaidCount());
     unawaited(_loadCreditAccounts());
   }
 
@@ -96,6 +98,14 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
       amount: amount,
     );
     await _loadFirstPage();
+    unawaited(_loadCreditUnpaidCount());
+    unawaited(_loadCreditAccounts());
+  }
+
+  Future<void> deleteCreditCustomer(String customerName) async {
+    await _repository.deleteCreditCustomer(customerName);
+    await _loadFirstPage();
+    unawaited(_loadCreditUnpaidCount());
     unawaited(_loadCreditAccounts());
   }
 
@@ -143,9 +153,30 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
       final docs = await _repository.fetchCreditSales();
       final records = docs.map(SaleRecord.new).toList();
       final accounts = _buildCreditAccounts(records);
-      emit(state.copyWith(creditAccounts: accounts, isCreditLoading: false));
+      final unpaidCount = accounts.fold<int>(
+        0,
+        (sum, account) => sum + account.unpaidCount,
+      );
+      emit(
+        state.copyWith(
+          creditAccounts: accounts,
+          isCreditLoading: false,
+          creditUnpaidCount: unpaidCount,
+        ),
+      );
     } catch (_) {
       emit(state.copyWith(isCreditLoading: false));
+    }
+  }
+
+  Future<void> _loadCreditUnpaidCount() async {
+    if (state.isCreditCountLoading) return;
+    emit(state.copyWith(isCreditCountLoading: true));
+    try {
+      final count = await _repository.fetchUnpaidCreditCount();
+      emit(state.copyWith(creditUnpaidCount: count));
+    } finally {
+      emit(state.copyWith(isCreditCountLoading: false));
     }
   }
 
@@ -153,27 +184,52 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
     try {
       emit(state.copyWith(isRangeTotalLoading: true));
 
-      final docs = await _repository.fetchAllForRange(range: range);
-      final records = docs.map(SaleRecord.new).toList();
+      final baseDocs = await _repository.fetchAllForRange(range: range);
+      final paymentDocs =
+          await _repository.fetchPaymentEventsForRange(range: range);
+
+      final combined =
+          <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      for (final doc in baseDocs) {
+        combined[doc.id] = doc;
+      }
+      for (final doc in paymentDocs) {
+        combined[doc.id] = doc;
+      }
+
+      final records = combined.values.map(SaleRecord.new).toList();
 
       bool inRange(DateTime value) {
         return !value.isBefore(range.start) && value.isBefore(range.end);
       }
 
-      final Map<String, List<SaleRecord>> grouped = {};
-      for (final record in records) {
-        final effective = record.effectiveTime;
-        if (!inRange(effective)) continue;
-        final shifted = shiftDayByFourHours(effective);
-        final key =
-            '${shifted.year}-${shifted.month.toString().padLeft(2, '0')}-${shifted.day.toString().padLeft(2, '0')}';
-        grouped.putIfAbsent(key, () => <SaleRecord>[]).add(record);
-      }
-
       final Map<String, double> totals = {};
-      grouped.forEach((key, list) {
-        totals[key] = _sumPaidOnly(list);
-      });
+      for (final record in records) {
+        if (record.isComplimentary) continue;
+        if (record.isDeferred) {
+          final events = record.paymentEvents;
+          if (events.isNotEmpty) {
+            for (final event in events) {
+              if (event.amount <= 0) continue;
+              if (!inRange(event.at)) continue;
+              final key = _dayKey(event.at);
+              totals[key] = (totals[key] ?? 0) + event.amount;
+            }
+          } else if (record.isPaid && record.settledAt != null) {
+            final settledAt = record.settledAt!;
+            if (inRange(settledAt)) {
+              final key = _dayKey(settledAt);
+              totals[key] = (totals[key] ?? 0) + record.totalPrice;
+            }
+          }
+          continue;
+        }
+
+        if (record.isPaid) {
+          final key = _dayKey(record.effectiveTime);
+          totals[key] = (totals[key] ?? 0) + record.totalPrice;
+        }
+      }
 
       emit(state.copyWith(fullTotalsByDay: totals));
     } finally {
@@ -206,9 +262,7 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
     final Map<String, List<SaleRecord>> grouped = {};
     for (final record in filtered) {
       final effective = record.effectiveTime;
-      final shifted = shiftDayByFourHours(effective);
-      final key =
-          '${shifted.year}-${shifted.month.toString().padLeft(2, '0')}-${shifted.day.toString().padLeft(2, '0')}';
+      final key = _dayKey(effective);
       grouped.putIfAbsent(key, () => <SaleRecord>[]).add(record);
     }
 
@@ -253,5 +307,10 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
       }
     }
     return sum;
+  }
+
+  String _dayKey(DateTime value) {
+    final shifted = shiftDayByFourHours(value);
+    return '${shifted.year}-${shifted.month.toString().padLeft(2, '0')}-${shifted.day.toString().padLeft(2, '0')}';
   }
 }

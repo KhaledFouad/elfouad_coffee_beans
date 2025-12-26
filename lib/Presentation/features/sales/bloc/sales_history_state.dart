@@ -20,6 +20,8 @@ class SalesHistoryState extends Equatable {
     required this.isRangeTotalLoading,
     required this.creditAccounts,
     required this.isCreditLoading,
+    required this.creditUnpaidCount,
+    required this.isCreditCountLoading,
     this.customRange,
   });
 
@@ -34,6 +36,8 @@ class SalesHistoryState extends Equatable {
         isRangeTotalLoading: true,
         creditAccounts: const [],
         isCreditLoading: false,
+        creditUnpaidCount: 0,
+        isCreditCountLoading: false,
         customRange: null,
       );
 
@@ -47,6 +51,8 @@ class SalesHistoryState extends Equatable {
   final bool isRangeTotalLoading;
   final List<CreditCustomerAccount> creditAccounts;
   final bool isCreditLoading;
+  final int creditUnpaidCount;
+  final bool isCreditCountLoading;
   final DateTimeRange? customRange;
 
   bool get isEmpty => allRecords.isEmpty;
@@ -63,6 +69,8 @@ class SalesHistoryState extends Equatable {
     bool? isRangeTotalLoading,
     List<CreditCustomerAccount>? creditAccounts,
     bool? isCreditLoading,
+    int? creditUnpaidCount,
+    bool? isCreditCountLoading,
     Object? customRange = _unset,
   }) {
     return SalesHistoryState(
@@ -77,6 +85,9 @@ class SalesHistoryState extends Equatable {
           isRangeTotalLoading ?? this.isRangeTotalLoading,
       creditAccounts: creditAccounts ?? this.creditAccounts,
       isCreditLoading: isCreditLoading ?? this.isCreditLoading,
+      creditUnpaidCount: creditUnpaidCount ?? this.creditUnpaidCount,
+      isCreditCountLoading:
+          isCreditCountLoading ?? this.isCreditCountLoading,
       customRange: identical(customRange, _unset)
           ? this.customRange
           : customRange as DateTimeRange?,
@@ -95,6 +106,8 @@ class SalesHistoryState extends Equatable {
         isRangeTotalLoading,
         creditAccounts,
         isCreditLoading,
+        creditUnpaidCount,
+        isCreditCountLoading,
         customRange,
       ];
 }

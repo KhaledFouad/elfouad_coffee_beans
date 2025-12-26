@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:elfouad_coffee_beans/Presentation/features/sales/models/payment_event.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
@@ -12,10 +13,7 @@ import '../models/sale_record.dart';
 import '../utils/sale_utils.dart';
 
 class CreditCustomerPage extends StatefulWidget {
-  const CreditCustomerPage({
-    super.key,
-    required this.customerName,
-  });
+  const CreditCustomerPage({super.key, required this.customerName});
 
   final String customerName;
 
@@ -31,9 +29,7 @@ class _CreditCustomerPageState extends State<CreditCustomerPage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.customerName),
-        ),
+        appBar: AppBar(title: Text(widget.customerName)),
         body: BlocBuilder<SalesHistoryCubit, SalesHistoryState>(
           builder: (context, state) {
             final account = _findAccount(state, widget.customerName);
@@ -68,7 +64,8 @@ class _CreditCustomerPageState extends State<CreditCustomerPage> {
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
                           itemCount: sales.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             final record = sales[index];
                             return _CreditSaleTile(
@@ -209,8 +206,7 @@ class _CreditCustomerPageState extends State<CreditCustomerPage> {
             child: const Text(AppStrings.dialogCancel),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.pop(context, controller.text.trim()),
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text(AppStrings.dialogConfirm),
           ),
         ],
@@ -220,9 +216,9 @@ class _CreditCustomerPageState extends State<CreditCustomerPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   double? _parseAmount(String raw) {
@@ -342,8 +338,7 @@ class _AccountHeader extends StatelessWidget {
             Text(
               '${AppStrings.labelTotalOwed}: ${totalOwed.toStringAsFixed(2)}',
               style: TextStyle(
-                color:
-                    totalOwed > 0 ? Colors.orange.shade900 : Colors.black54,
+                color: totalOwed > 0 ? Colors.orange.shade900 : Colors.black54,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -387,6 +382,8 @@ class _CreditSaleTile extends StatelessWidget {
     final due = record.outstandingAmount;
     final isPaid = due <= 0;
     final settledAt = record.settledAt;
+    final paymentEvents = List.of(record.paymentEvents)
+      ..sort((a, b) => b.at.compareTo(a.at));
 
     return Card(
       elevation: 2,
@@ -404,11 +401,13 @@ class _CreditSaleTile extends StatelessWidget {
                   ),
                 ),
                 _StatusChip(
-                  label:
-                      isPaid ? AppStrings.labelPaid : AppStrings.labelUnpaid,
-                  color: isPaid ? Colors.green.shade600 : Colors.orange.shade800,
-                  background:
-                      isPaid ? Colors.green.shade50 : Colors.orange.shade50,
+                  label: isPaid ? AppStrings.labelPaid : AppStrings.labelUnpaid,
+                  color: isPaid
+                      ? Colors.green.shade600
+                      : Colors.orange.shade800,
+                  background: isPaid
+                      ? Colors.green.shade50
+                      : Colors.orange.shade50,
                 ),
               ],
             ),
@@ -445,6 +444,24 @@ class _CreditSaleTile extends StatelessWidget {
               Column(
                 children: record.components
                     .map((component) => _ComponentRow(component: component))
+                    .toList(),
+              ),
+            ],
+            if (paymentEvents.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              const Divider(height: 1),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  AppStrings.labelPartialPayments,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Column(
+                children: paymentEvents
+                    .map((event) => _PaymentEventRow(event: event))
                     .toList(),
               ),
             ],
@@ -489,7 +506,11 @@ class _StatusChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }
@@ -528,6 +549,34 @@ class _ComponentRow extends StatelessWidget {
           Text(
             AppStrings.priceLine(component.lineTotalPrice),
             style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentEventRow extends StatelessWidget {
+  const _PaymentEventRow({required this.event});
+
+  final PaymentEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.payments_outlined, size: 16, color: Colors.brown),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              AppStrings.partialPaymentLine(
+                event.amount,
+                formatDateTime(event.at),
+              ),
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
         ],
       ),

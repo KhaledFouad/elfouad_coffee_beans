@@ -60,13 +60,13 @@ class CreditAccountsSection extends StatelessWidget {
                     .map(
                       (account) => Padding(
                         padding: const EdgeInsets.only(bottom: 8),
-                        child: _CreditAccountTile(
-                          account: account,
-                          onTap: () => onSelect(account),
-                        ),
+                      child: _CreditAccountTile(
+                        account: account,
+                        onTap: () => onSelect(account),
                       ),
-                    )
-                    .toList(),
+                    ),
+                  )
+                  .toList(),
               ),
           ],
         ),
@@ -76,7 +76,10 @@ class CreditAccountsSection extends StatelessWidget {
 }
 
 class _CreditAccountTile extends StatelessWidget {
-  const _CreditAccountTile({required this.account, required this.onTap});
+  const _CreditAccountTile({
+    required this.account,
+    required this.onTap,
+  });
 
   final CreditCustomerAccount account;
   final VoidCallback onTap;

@@ -203,8 +203,10 @@ class AppStrings {
   static const String dialogPayAmountTitle = 'دفع المبلغ';
   static const String errorEnterValidAmount = 'أدخل مبلغًا صحيحًا.';
   static const String creditPaymentExceedsTotal =
-      'المبلغ يتجاوز المبلغ المستحق؛ سيتم تطبيق المبلغ المتبقي فقط.';
-
+      'المبلغ أكبر من الإجمالي المستحق؛ سيتم خصم المتبقي فقط.';
+  static const String labelPartialPayments = 'دفعات جزئية';
+  static String partialPaymentLine(num amount, String when) =>
+      'سداد جزئي: ${amount.toStringAsFixed(2)} - $when';
   static const String dialogDeleteCreditAccountTitle = 'حذف حساب الأجل';
   static String confirmDeleteCreditAccount(String name) =>
       'سيتم حذف حساب $name وكل عمليات الأجل الخاصة به. هل تريد المتابعة؟';

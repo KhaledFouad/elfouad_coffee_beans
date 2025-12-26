@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../utils/sale_utils.dart';
 import 'sale_component.dart';
+import 'payment_event.dart';
 
 class SaleRecord {
   SaleRecord(this.snapshot)
@@ -40,8 +41,18 @@ class SaleRecord {
   bool get usesSettledTime =>
       !isSameMinute(effectiveTime, createdAt);
 
-  List<SaleComponent> get components =>
-      extractComponents(data, type);
+  List<SaleComponent> get components => extractComponents(data, type);
+
+  List<PaymentEvent> get paymentEvents {
+    final raw = data['payment_events'];
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((e) => PaymentEvent.fromMap(e.cast<String, dynamic>()))
+          .toList();
+    }
+    return const [];
+  }
 
   String get titleLine => buildTitleLine(data, type);
 
@@ -59,7 +70,17 @@ class SaleRecord {
       }
       return dueAmount;
     }
-    if (isDeferred && !isPaid) return totalPrice;
+    if (isDeferred && !isPaid) {
+      if (paymentEvents.isNotEmpty && totalPrice > 0) {
+        final paid = paymentEvents.fold<double>(
+          0.0,
+          (sum, event) => sum + event.amount,
+        );
+        final remaining = totalPrice - paid;
+        return remaining > 0 ? remaining : 0.0;
+      }
+      return totalPrice;
+    }
     return 0.0;
   }
 }
