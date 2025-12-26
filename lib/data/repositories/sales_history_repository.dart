@@ -164,7 +164,7 @@ class SalesHistoryRepository {
           }
         }
         transaction.update(ref, {'components': components});
-      
+      }
 
       final newProfit = totalPrice - totalCost;
       final now = Timestamp.now();
