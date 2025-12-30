@@ -105,12 +105,15 @@ class DrinksPage extends StatelessWidget {
             // === Custom sort: preferred order first, then alphabetical ===
             const preferredOrderDrinks = <String>[
               'قهوة تركي',
-              'قهوة اسبريسو',
               'قهوة فرنساوي',
+              'قهوة اسبريسو',
               'قهوة بندق قطع',
-              'قهوة كراميل',
               'شاي',
+              'مياه',
               'كوفي ميكس',
+              'لاتيه',
+              'كابتشينو',
+              'نسكافيه',
             ];
             final rankDrinks = <String, int>{
               for (var i = 0; i < preferredOrderDrinks.length; i++)

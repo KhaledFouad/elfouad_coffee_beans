@@ -122,13 +122,16 @@ class BlendsPage extends StatelessWidget {
 
           // === Custom sort: preferred order first, then alphabetical ===
           const preferredOrderBlends = <String>[
+            'توليفة القهاوى',
             'توليفة القهاوي',
             'توليفة كلاسيك',
             'توليفة مخصوص',
             'توليفة اسبيشيال',
             'توليفة الفؤاد',
-            'قهوة بندق قطع',
             'توليفة اسبريسو',
+            'قهوة بندق قطع',
+            'كوفي ميكس',
+            'هوت شوكلت',
           ];
           final rankBlends = <String, int>{
             for (var i = 0; i < preferredOrderBlends.length; i++)

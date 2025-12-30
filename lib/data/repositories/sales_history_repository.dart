@@ -223,14 +223,34 @@ class SalesHistoryRepository {
 
   Future<List<String>> fetchCreditCustomerNames() async {
     final docs = await fetchCreditSales();
-    final names = <String>{};
+    final lastPaidByName = <String, DateTime?>{};
     for (final doc in docs) {
-      final name = (doc.data()['note'] ?? '').toString().trim();
+      final data = doc.data();
+      final name = (data['note'] ?? '').toString().trim();
       if (name.isNotEmpty) {
-        names.add(name);
+        final latest = _latestPaymentAt(data);
+        if (!lastPaidByName.containsKey(name)) {
+          lastPaidByName[name] = latest;
+          continue;
+        }
+        final existing = lastPaidByName[name];
+        if (latest != null &&
+            (existing == null || latest.isAfter(existing))) {
+          lastPaidByName[name] = latest;
+        }
       }
     }
-    final sorted = names.toList()..sort();
+    final sorted = lastPaidByName.keys.toList()
+      ..sort((a, b) {
+        final aAt = lastPaidByName[a];
+        final bAt = lastPaidByName[b];
+        if (aAt == null && bAt == null) return a.compareTo(b);
+        if (aAt == null) return 1;
+        if (bAt == null) return -1;
+        final cmp = bAt.compareTo(aAt);
+        if (cmp != 0) return cmp;
+        return a.compareTo(b);
+      });
     return sorted;
   }
 
@@ -409,6 +429,25 @@ class SalesHistoryRepository {
     return double.tryParse(value?.toString() ?? '0') ?? 0;
   }
 
+  DateTime? _parseDateTime(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(
+        value.toInt(),
+        isUtc: true,
+      ).toLocal();
+    }
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
   double _resolveDueAmount(Map<String, dynamic> data) {
     final raw = data['due_amount'];
     final dueAmount = _parseDouble(raw);
@@ -445,6 +484,37 @@ class SalesHistoryRepository {
       'at': at,
     });
     return existing;
+  }
+
+  DateTime? _latestPaymentAt(Map<String, dynamic> data) {
+    DateTime? latest;
+
+    void consider(dynamic value) {
+      final parsed = _parseDateTime(value);
+      if (parsed == null) return;
+      if (latest == null || parsed.isAfter(latest!)) {
+        latest = parsed;
+      }
+    }
+
+    final rawEvents = data['payment_events'];
+    if (rawEvents is List) {
+      for (final entry in rawEvents) {
+        if (entry is Map) {
+          consider(entry['at']);
+        }
+      }
+    }
+
+    consider(data['last_payment_at']);
+
+    final isDeferred =
+        data['is_deferred'] == true || data['is_credit'] == true;
+    if (isDeferred && data['paid'] == true) {
+      consider(data['settled_at']);
+    }
+
+    return latest;
   }
 
   DateTime _createdAtOf(QueryDocumentSnapshot<Map<String, dynamic>> doc) {

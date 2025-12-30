@@ -290,13 +290,51 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
       return CreditCustomerAccount(name: entry.key, sales: sales);
     }).toList();
 
+    final lastPaymentByName = <String, DateTime?>{};
+    for (final account in accounts) {
+      lastPaymentByName[account.name] = _latestCreditPaymentAt(account.sales);
+    }
+
     accounts.sort((a, b) {
-      final owedCompare = b.totalOwed.compareTo(a.totalOwed);
-      if (owedCompare != 0) return owedCompare;
+      final aAt = lastPaymentByName[a.name];
+      final bAt = lastPaymentByName[b.name];
+      if (aAt == null && bAt == null) return a.name.compareTo(b.name);
+      if (aAt == null) return 1;
+      if (bAt == null) return -1;
+      final cmp = bAt.compareTo(aAt);
+      if (cmp != 0) return cmp;
       return a.name.compareTo(b.name);
     });
 
     return accounts;
+  }
+
+  DateTime? _latestCreditPaymentAt(List<SaleRecord> sales) {
+    DateTime? latest;
+    for (final sale in sales) {
+      if (!sale.isDeferred) continue;
+
+      DateTime? candidate;
+      if (sale.paymentEvents.isNotEmpty) {
+        for (final event in sale.paymentEvents) {
+          if (candidate == null || event.at.isAfter(candidate)) {
+            candidate = event.at;
+          }
+        }
+      }
+
+      candidate ??= parseOptionalDate(sale.data['last_payment_at']);
+
+      if (candidate == null && sale.isPaid && sale.settledAt != null) {
+        candidate = sale.settledAt;
+      }
+
+      if (candidate != null &&
+          (latest == null || candidate.isAfter(latest))) {
+        latest = candidate;
+      }
+    }
+    return latest;
   }
 
   double _sumPaidOnly(List<SaleRecord> entries) {
