@@ -43,15 +43,27 @@ abstract class _DrinkDialogStateBase extends State<DrinkDialog> {
 
   bool get _canQuickConfirm;
 
+  List<String> get _variantOptions;
+  String get _variant;
+  set _variant(String value);
+
+  List<String> get _roastOptions;
+  String get _roast;
+  set _roast(String value);
+
+  bool get _showLegacyServing;
   Serving get _serving;
   set _serving(Serving value);
 
-  bool get _isCoffeeMix;
+  bool get _showLegacyMix;
   String get _mix;
   set _mix(String value);
+  bool get _isCoffeeMix;
 
   bool get _spiced;
   set _spiced(bool value);
+
+  bool get _spicedEnabled;
 
   bool get _isComplimentary;
   set _isComplimentary(bool value);
@@ -80,22 +92,59 @@ class _DrinkDialogState extends _DrinkDialogStateBase
   @override
   bool get _canQuickConfirm => widget.onAddToCart != null;
 
-  // Serving (سنجل/دوبل) للتركي/اسبريسو فقط
+  late final List<Map<String, dynamic>> _pricingRows;
+  late final List<Map<String, dynamic>> _roastUsageRows;
+  late final List<String> _variantOptionsList;
+  late final List<String> _roastOptionsList;
+  late final bool _spicedEnabledValue;
+
+  // Serving (legacy)
   @override
   Serving _serving = Serving.single;
 
-  // Coffee Mix (مياه/لبن)
-  @override
-  bool get _isCoffeeMix => _name.trim() == 'كوفي ميكس';
+  // Coffee Mix (legacy)
   @override
   String _mix = 'water'; // water | milk
 
-  // ==== Spice option (Turkish only) ====
+  // Selected options (new schema)
+  @override
+  String _variant = '';
+  @override
+  String _roast = '';
+
+  // ==== Spice option ====
   @override
   bool _spiced = false;
   @override
   bool _isComplimentary = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _pricingRows = _extractMapList(widget.drinkData['pricing']);
+    _roastUsageRows = _extractMapList(widget.drinkData['roastUsage']);
+    _variantOptionsList = _extractOptions(
+      widget.drinkData['variants'],
+      _pricingRows,
+      'variant',
+    );
+    _roastOptionsList = _extractOptions(
+      widget.drinkData['roastLevels'],
+      _pricingRows,
+      'roast',
+    );
+    if (_variantOptionsList.isNotEmpty) {
+      _variant = _variantOptionsList.first;
+    }
+    if (_roastOptionsList.isNotEmpty) {
+      _roast = _roastOptionsList.first;
+    }
+    _spicedEnabledValue =
+        _readBool(widget.drinkData['spicedEnabled']) ||
+        (_supportsServingChoice &&
+            (_isNum(widget.drinkData['spicedCupCost']) ||
+                _isNum(widget.drinkData['spicedDoubleCupCost'])));
+  }
   // --------- Utilities ---------
   String _norm(String s) => s.replaceAll('ى', 'ي').trim();
   bool _isNum(dynamic v) =>
@@ -103,6 +152,60 @@ class _DrinkDialogState extends _DrinkDialogStateBase
   double _numOf(dynamic v, [double def = 0.0]) {
     if (v is num) return v.toDouble();
     return double.tryParse(v?.toString() ?? '') ?? def;
+  }
+
+  bool _readBool(dynamic v) {
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = (v ?? '').toString().trim().toLowerCase();
+    return s == 'true' || s == '1' || s == 'yes';
+  }
+
+  Map<String, dynamic> _mapOf(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      return raw.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return <String, dynamic>{};
+  }
+
+  List<Map<String, dynamic>> _extractMapList(dynamic raw) {
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((e) => _mapOf(e))
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  List<String> _readStringList(dynamic raw) {
+    if (raw is! List) return const [];
+    final result = <String>[];
+    for (final item in raw) {
+      final value = (item ?? '').toString().trim();
+      if (value.isEmpty) continue;
+      if (!result.contains(value)) result.add(value);
+    }
+    return result;
+  }
+
+  List<String> _extractOptions(
+    dynamic raw,
+    List<Map<String, dynamic>> pricingRows,
+    String key,
+  ) {
+    final direct = _readStringList(raw);
+    if (direct.isNotEmpty) return direct;
+    if (pricingRows.isEmpty) return const [];
+    final result = <String>[];
+    for (final row in pricingRows) {
+      final value = (row[key] ?? '').toString().trim();
+      if (value.isEmpty) continue;
+      if (!result.contains(value)) result.add(value);
+    }
+    return result;
   }
 
   // --------- getters آمنة ---------
@@ -152,6 +255,9 @@ class _DrinkDialogState extends _DrinkDialogStateBase
       _norm(_name) == _norm('قهوة اسبريسو');
 
   // أسعار الكوفي ميكس (اختياري)
+
+  @override
+  bool get _isCoffeeMix => widget.drinkData['mixOptions'] is Map;
   double get _coffeeMixUnitPrice {
     final mix = widget.drinkData['mixOptions'] as Map<String, dynamic>?;
     final water = _numOf(mix?['waterPrice'], 15);
@@ -160,7 +266,48 @@ class _DrinkDialogState extends _DrinkDialogStateBase
   }
 
   // سعر الوحدة النهائي
+  @override
+  List<String> get _variantOptions => _variantOptionsList;
+  @override
+  List<String> get _roastOptions => _roastOptionsList;
+  @override
+  bool get _showLegacyServing =>
+      _variantOptionsList.isEmpty && _supportsServingChoice;
+  @override
+  bool get _showLegacyMix => _variantOptionsList.isEmpty && _isCoffeeMix;
+  @override
+  bool get _spicedEnabled => _spicedEnabledValue;
+
+  Map<String, dynamic>? get _selectedPricing {
+    if (_pricingRows.isEmpty) return null;
+    final variant = _variant.trim();
+    final roast = _roast.trim();
+    for (final row in _pricingRows) {
+      final rowVariant = (row['variant'] ?? '').toString().trim();
+      final rowRoast = (row['roast'] ?? '').toString().trim();
+      final variantOk = variant.isEmpty || rowVariant == variant;
+      final roastOk = roast.isEmpty || rowRoast == roast;
+      if (variantOk && roastOk) return row;
+    }
+    return null;
+  }
+
+  double get _pricingSellPrice =>
+      _numOf(_selectedPricing?['sellPrice'], _sellPriceBase);
+  double get _pricingCostPrice =>
+      _numOf(_selectedPricing?['costPrice'], _costPriceSingle);
+  double get _spicedPriceDelta => _numOf(_selectedPricing?['spicedPriceDelta']);
+  double get _spicedCostDelta => _numOf(_selectedPricing?['spicedCostDelta']);
+
   double get _unitPriceEffective {
+    if (_pricingRows.isNotEmpty) {
+      final base = _pricingSellPrice;
+      if (_spicedEnabled && _spiced) {
+        return base + _spicedPriceDelta;
+      }
+      return base;
+    }
+
     if (_isCoffeeMix) return _coffeeMixUnitPrice;
 
     if (_supportsServingChoice && _serving == Serving.dbl) {
@@ -173,6 +320,14 @@ class _DrinkDialogState extends _DrinkDialogStateBase
 
   // تكلفة سنجل/دبل
   double get _unitCostFinal {
+    if (_pricingRows.isNotEmpty) {
+      final base = _pricingCostPrice;
+      if (_spicedEnabled && _spiced) {
+        return base + _spicedCostDelta;
+      }
+      return base;
+    }
+
     final isDouble = _supportsServingChoice && _serving == Serving.dbl;
 
     if (!isDouble) {
@@ -204,6 +359,60 @@ class _DrinkDialogState extends _DrinkDialogStateBase
   double get _displayUnitPrice =>
       _isComplimentary ? 0.0 : _unitPriceEffective;
 
+  String _variantLabel() {
+    final roast = _roast.trim();
+    final variant = _variant.trim();
+    if (roast.isNotEmpty && variant.isNotEmpty) {
+      return '$roast $variant';
+    }
+    if (roast.isNotEmpty) return roast;
+    if (variant.isNotEmpty) return variant;
+    if (_showLegacyServing) {
+      return _serving == Serving.dbl
+          ? AppStrings.labelDouble
+          : AppStrings.labelSingles;
+    }
+    if (_showLegacyMix) {
+      return _mix == 'milk' ? AppStrings.labelMilk : AppStrings.labelWater;
+    }
+    return '';
+  }
+
+  Map<String, dynamic>? _selectedRoastUsage() {
+    if (_roastUsageRows.isEmpty) return null;
+    final roast = _roast.trim();
+    if (roast.isNotEmpty) {
+      for (final row in _roastUsageRows) {
+        if ((row['roast'] ?? '').toString().trim() == roast) {
+          return row;
+        }
+      }
+      return null;
+    }
+
+    for (final row in _roastUsageRows) {
+      final rowRoast = (row['roast'] ?? '').toString().trim();
+      if (rowRoast.isEmpty) return row;
+    }
+    if (_roastUsageRows.length == 1) return _roastUsageRows.first;
+    return null;
+  }
+
+  double _resolveUsedAmount(Map<String, dynamic>? usage, String variant) {
+    if (usage == null) return 0.0;
+    final usedAmounts = usage['usedAmounts'];
+    if (variant.isNotEmpty && usedAmounts is Map) {
+      for (final entry in usedAmounts.entries) {
+        final key = entry.key.toString().trim();
+        if (key == variant) {
+          final amount = _numOf(entry.value);
+          if (amount > 0) return amount;
+        }
+      }
+    }
+    return _numOf(usage['usedAmount']);
+  }
+
   /// يبني CartLine للمشروب
   @override
   CartLine _buildCartLine() {
@@ -216,83 +425,67 @@ class _DrinkDialogState extends _DrinkDialogStateBase
     final cost = _totalCost;
     final unitPrice = _isComplimentary ? 0.0 : _unitPriceEffective;
 
-    // استهلاك البن من توليفة (لو موجود)
-    final usedAmountRaw = widget.drinkData['usedAmount'];
-    final usedAmount = _isNum(usedAmountRaw) ? _numOf(usedAmountRaw) : null;
-
-    final isDouble = _supportsServingChoice && _serving == Serving.dbl;
-    final perUnitConsumption = (usedAmount == null || usedAmount <= 0)
-        ? 0.0
-        : (isDouble
-              ? (_doubleUsedAmount > 0 ? _doubleUsedAmount : usedAmount * 2.0)
-              : usedAmount);
-
+    final usage = _selectedRoastUsage();
+    final perUnitConsumption = _resolveUsedAmount(usage, _variant.trim());
     final totalConsumption = perUnitConsumption * _qty;
 
-    final sourceBlendId = (widget.drinkData['sourceBlendId'] ?? '')
-        .toString()
-        .trim();
-
-    final sourceBlendNameRaw = (widget.drinkData['sourceBlendName'] ?? '')
-        .toString()
-        .trim();
-
-    const Map<String, String> sourceBlendOverrides = {
-      'قهوة اسبريسو': 'توليفة اسبريسو',
-      'شاي': 'شاي كيني',
-      'شاى': 'شاي كيني',
-    };
-
-    String resolvedSourceBlendName = sourceBlendNameRaw.isNotEmpty
-        ? sourceBlendNameRaw
-        : (sourceBlendOverrides[_norm(_name)] ?? _name);
+    final usedItem = usage == null ? const <String, dynamic>{} : _mapOf(usage['usedItem']);
+    final usedCollection = (usedItem['collection'] ?? '').toString().trim();
+    final usedId = (usedItem['id'] ?? '').toString().trim();
+    final usedName = (usedItem['name'] ?? '').toString().trim();
+    final usedVariant = (usedItem['variant'] ?? '').toString().trim();
+    final usedLabel = usedName.isEmpty
+        ? null
+        : (usedVariant.isNotEmpty ? '$usedName - $usedVariant' : usedName);
 
     final impacts = <StockImpact>[];
-    if (totalConsumption > 0 && sourceBlendId.isNotEmpty) {
+    if (totalConsumption > 0 && usedCollection.isNotEmpty && usedId.isNotEmpty) {
       impacts.add(
         StockImpact(
-          collection: 'blends',
-          docId: sourceBlendId,
+          collection: usedCollection,
+          docId: usedId,
           field: 'stock',
           amount: totalConsumption,
-          label: resolvedSourceBlendName,
+          label: usedLabel,
         ),
       );
     }
 
     final meta = <String, dynamic>{
-      'serving': _supportsServingChoice
-          ? (_serving == Serving.dbl ? 'double' : 'single')
-          : 'single',
-      'spiced': _isTurkish ? _spiced : false,
-      'isTurkish': _isTurkish,
-      'isCoffeeMix': _isCoffeeMix,
-      if (_isCoffeeMix) 'mix': _mix,
+      'variant': _variant.trim(),
+      'roast': _roast.trim(),
+      'spiced': _spicedEnabled ? _spiced : false,
+      'spicedEnabled': _spicedEnabled,
       'unit_price_effective': _unitPriceEffective,
-      'list_cost': _costPriceSingle,
       'unit_cost_effective': _unitCostFinal,
-      'cost_basis': (_isTurkish && _spiced)
-          ? (_supportsServingChoice && _serving == Serving.dbl
-                ? 'spicedDoubleCupCost'
-                : 'spicedCupCost')
-          : (_supportsServingChoice && _serving == Serving.dbl
-                ? 'doubleCost'
-                : 'costPrice'),
+      if (_pricingRows.isNotEmpty)
+        'pricing': {
+          'sellPrice': _pricingSellPrice,
+          'costPrice': _pricingCostPrice,
+          'spicedPriceDelta': _spicedPriceDelta,
+          'spicedCostDelta': _spicedCostDelta,
+        },
+      if (_showLegacyServing)
+        'serving': _serving == Serving.dbl ? 'double' : 'single',
+      if (_showLegacyMix) 'mix': _mix,
       if (totalConsumption > 0)
         'consumption': {
-          'sourceBlendId': sourceBlendId.isEmpty ? null : sourceBlendId,
-          'sourceBlendName': resolvedSourceBlendName,
+          'collection': usedCollection,
+          'id': usedId,
+          'name': usedName,
+          'variant': usedVariant,
           'usedAmountPerUnit': perUnitConsumption,
-          'serving': _serving == Serving.dbl ? 'double' : 'single',
           'totalConsumed': totalConsumption,
         },
     };
+
+    final variantLabel = _variantLabel();
 
     return CartLine(
       id: CartLine.newId(),
       productId: widget.drinkId,
       name: _name,
-      variant: null,
+      variant: variantLabel.isEmpty ? null : variantLabel,
       type: 'drink',
       unit: _unit,
       image: _image,
@@ -316,3 +509,13 @@ class _DrinkDialogState extends _DrinkDialogStateBase
   }
 
 }
+
+
+
+
+
+
+
+
+
+

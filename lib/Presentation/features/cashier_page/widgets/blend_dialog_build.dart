@@ -83,6 +83,8 @@ mixin _BlendDialogBuild on _BlendDialogStateBase {
                                               _variant = r;
                                               if (!_canSpice) {
                                                 _isSpiced = false;
+                                              }
+                                              if (!_ginsengEnabled) {
                                                 _ginsengGrams = 0;
                                               }
                                             });
@@ -142,7 +144,7 @@ mixin _BlendDialogBuild on _BlendDialogStateBase {
 
                           // === ?????? (??? ?? canSpice) ===
                           _ginsengCard(),
-                          if (_canSpice) const SizedBox(height: 12),
+                          if (_ginsengEnabled) const SizedBox(height: 12),
 
                           // ??? ???????
                           Align(

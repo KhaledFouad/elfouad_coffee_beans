@@ -56,6 +56,10 @@ abstract class _SingleDialogStateBase extends State<SingleDialog> {
   Map<String, double> get _stockByVariantId;
   Map<String, double> get _spicesPriceByVariantId;
   Map<String, double> get _spicesCostByVariantId;
+  Map<String, bool?> get _spicedEnabledByVariantId;
+  Map<String, bool?> get _ginsengEnabledByVariantId;
+  Map<String, double> get _ginsengPricePerKgByVariantId;
+  Map<String, double> get _ginsengCostPerKgByVariantId;
 
   bool get _stocksLoading;
   set _stocksLoading(bool value);
@@ -81,6 +85,7 @@ abstract class _SingleDialogStateBase extends State<SingleDialog> {
 
   SingleVariant? get _selected;
   bool get _canSpice;
+  bool get _ginsengEnabled;
   double get _sellPerKg;
   double get _pricePerG;
   int get _grams;
@@ -124,6 +129,14 @@ class _SingleDialogState extends _SingleDialogStateBase
   @override
   final Map<String, double> _spicesCostByVariantId = {}; // تكلفة التحويج/كجم
   @override
+  final Map<String, bool?> _spicedEnabledByVariantId = {};
+  @override
+  final Map<String, bool?> _ginsengEnabledByVariantId = {};
+  @override
+  final Map<String, double> _ginsengPricePerKgByVariantId = {};
+  @override
+  final Map<String, double> _ginsengCostPerKgByVariantId = {};
+  @override
   bool _stocksLoading = true;
 
   @override
@@ -143,8 +156,6 @@ class _SingleDialogState extends _SingleDialogStateBase
   // جينسنج
   @override
   int _ginsengGrams = 0;
-  static const double _ginsengPricePerG = 5.0;
-  static const double _ginsengCostPerG = 4.0;
 
   // --- نومباد داخلي ---
   @override
@@ -195,9 +206,22 @@ class _SingleDialogState extends _SingleDialogStateBase
   bool get _canSpice {
     final sel = _selected;
     if (sel == null) return false;
+    final flag = _spicedEnabledByVariantId[sel.id];
     final p = _spicesPriceByVariantId[sel.id] ?? 0.0;
     final c = _spicesCostByVariantId[sel.id] ?? 0.0;
-    return (p > 0.0 || c > 0.0);
+    final hasDelta = p > 0.0 || c > 0.0;
+    return flag ?? hasDelta;
+  }
+
+  @override
+  bool get _ginsengEnabled {
+    final sel = _selected;
+    if (sel == null) return false;
+    final flag = _ginsengEnabledByVariantId[sel.id];
+    final p = _ginsengPricePerKgByVariantId[sel.id] ?? 0.0;
+    final c = _ginsengCostPerKgByVariantId[sel.id] ?? 0.0;
+    final hasDelta = p > 0.0 || c > 0.0;
+    return flag ?? hasDelta;
   }
 
   // أسعار بن (من الموديل)
@@ -223,12 +247,28 @@ class _SingleDialogState extends _SingleDialogStateBase
   double get _spicePricePerG => _spicesPricePerKg / 1000.0;
   double get _spiceCostPerG => _spicesCostPerKg / 1000.0;
 
+  double get _ginsengPricePerKg {
+    final sel = _selected;
+    if (!_ginsengEnabled || sel == null) return 0.0;
+    return _ginsengPricePerKgByVariantId[sel.id] ?? 0.0;
+  }
+
+  double get _ginsengCostPerKg {
+    final sel = _selected;
+    if (!_ginsengEnabled || sel == null) return 0.0;
+    return _ginsengCostPerKgByVariantId[sel.id] ?? 0.0;
+  }
+
+  double get _ginsengPricePerG => _ginsengPricePerKg / 1000.0;
+  double get _ginsengCostPerG => _ginsengCostPerKg / 1000.0;
+
   @override
   int get _grams {
     if (_mode == CalcMode.byMoney) {
       final money = _parseDouble(_moneyCtrl.text);
       if (money <= 0) return 0;
-      final effectivePerG = _sellPerG + (_isSpiced ? _spicePricePerG : 0.0);
+      final effectivePerG =
+          _sellPerG + (_isSpiced && _canSpice ? _spicePricePerG : 0.0);
       if (effectivePerG <= 0) return 0;
       final g = (money / effectivePerG).floor();
       return g.clamp(0, 1000000);
@@ -292,6 +332,8 @@ class _SingleDialogState extends _SingleDialogStateBase
       'price_per_g_effective': _pricePerG,
       'spice_price_per_kg': _spicesPricePerKg,
       'spice_cost_per_kg': _spicesCostPerKg,
+      'ginseng_price_per_kg': _ginsengPricePerKg,
+      'ginseng_cost_per_kg': _ginsengCostPerKg,
     };
 
     final variant = sel.variant.trim().isEmpty ? null : sel.variant.trim();
@@ -331,4 +373,5 @@ class _SingleDialogState extends _SingleDialogStateBase
     super.dispose();
   }
 }
+
 

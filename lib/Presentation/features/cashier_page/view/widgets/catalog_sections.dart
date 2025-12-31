@@ -44,7 +44,8 @@ class DrinksGrid extends StatelessWidget {
                 .map((doc) {
                   final data = doc.data();
                   final name = (data['name'] ?? '').toString();
-                  final image = (data['image'] ?? 'assets/drinks.jpg').toString();
+                  final image = (data['image'] ?? 'assets/drinks.jpg')
+                      .toString();
                   final sellPrice = (data['sellPrice'] is num)
                       ? (data['sellPrice'] as num).toDouble()
                       : double.tryParse('${data['sellPrice'] ?? 0}') ?? 0.0;
@@ -289,7 +290,7 @@ class ExtrasGrid extends StatelessWidget {
   static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
       FirebaseFirestore.instance
           .collection('extras')
-          .where('category', isEqualTo: 'biscuits')
+          .where('category', isEqualTo: 'الإضافات')
           .snapshots();
 
   @override
@@ -397,8 +398,9 @@ class CustomBlendEntry extends StatelessWidget {
   ) async {
     final data = doc.data() ?? const <String, dynamic>{};
     final rawTitle = (data['title'] ?? '').toString().trim();
-    final title =
-        rawTitle.isEmpty ? AppStrings.labelCustomBlendSingle : rawTitle;
+    final title = rawTitle.isEmpty
+        ? AppStrings.labelCustomBlendSingle
+        : rawTitle;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

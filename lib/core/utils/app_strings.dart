@@ -42,7 +42,7 @@ class AppStrings {
   static const String titleDrinksSection = 'المشروبات';
   static const String titleSinglesSection = 'أصناف منفردة';
   static const String titleBlendsSection = 'توليفات البن';
-  static const String titleExtrasSection = 'إضافات البن';
+  static const String titleExtrasSection = 'الإضافات';
   static const String titleCookiesSection = 'بسكوت ومعمول';
   static const String titleCustomBlendSection = 'توليفات العميل';
   static const String titleReadyBlends = 'توليفات جاهزة';

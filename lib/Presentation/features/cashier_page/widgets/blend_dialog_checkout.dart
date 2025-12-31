@@ -38,6 +38,8 @@ mixin _BlendDialogCheckout on _BlendDialogStateBase {
       'price_per_g_effective': _pricePerG,
       'spice_price_per_kg': _spicesPricePerKg,
       'spice_cost_per_kg': _spicesCostPerKg,
+      'ginseng_price_per_kg': _ginsengPricePerKg,
+      'ginseng_cost_per_kg': _ginsengCostPerKg,
     };
 
     final variant = sel.variant.trim().isEmpty ? null : sel.variant.trim();

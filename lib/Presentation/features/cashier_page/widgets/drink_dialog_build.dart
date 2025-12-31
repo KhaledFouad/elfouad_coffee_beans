@@ -41,7 +41,29 @@ mixin _DrinkDialogBuild on _DrinkDialogStateBase {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
-                          if (_supportsServingChoice) ...[
+                          if (_variantOptions.isNotEmpty) ...[
+                            Align(
+                              alignment: Alignment.center,
+                              child: SegmentedButton<String>(
+                                segments: _variantOptions
+                                    .map(
+                                      (v) => ButtonSegment(
+                                        value: v,
+                                        label: Text(v),
+                                      ),
+                                    )
+                                    .toList(),
+                                selected: {_variant},
+                                onSelectionChanged: _busy
+                                    ? null
+                                    : (s) => setState(() => _variant = s.first),
+                                showSelectedIcon: false,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
+                          if (_showLegacyServing) ...[
                             Align(
                               alignment: Alignment.center,
                               child: SegmentedButton<Serving>(
@@ -67,7 +89,7 @@ mixin _DrinkDialogBuild on _DrinkDialogStateBase {
                             const SizedBox(height: 12),
                           ],
 
-                          if (_isCoffeeMix) ...[
+                          if (_showLegacyMix) ...[
                             Align(
                               alignment: Alignment.center,
                               child: SegmentedButton<String>(
@@ -93,6 +115,48 @@ mixin _DrinkDialogBuild on _DrinkDialogStateBase {
                             const SizedBox(height: 12),
                           ],
 
+                          if (_roastOptions.isNotEmpty) ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: _roastOptions.map((r) {
+                                  final label =
+                                      r.isEmpty ? AppStrings.labelNone : r;
+                                  final selected = _roast == r;
+                                  return ChoiceChip(
+                                    label: Text(
+                                      label,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    selected: selected,
+                                    onSelected: _busy
+                                        ? null
+                                        : (v) {
+                                            if (!v) return;
+                                            setState(() => _roast = r);
+                                          },
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    labelPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.brown.shade200,
+                                    ),
+                                    selectedColor: Colors.brown.shade100,
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
                           // === Toggles row (????? ??? ??????) ===
                           Row(
                             children: [
@@ -106,7 +170,7 @@ mixin _DrinkDialogBuild on _DrinkDialogStateBase {
                                   leadingIcon: Icons.card_giftcard,
                                 ),
                               ),
-                              if (_isTurkish) ...[
+                              if (_spicedEnabled) ...[
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: ToggleCard(
@@ -310,3 +374,4 @@ mixin _DrinkDialogBuild on _DrinkDialogStateBase {
     );
   }
 }
+

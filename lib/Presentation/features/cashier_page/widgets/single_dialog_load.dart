@@ -3,6 +3,24 @@ part of 'single_dialog.dart';
 mixin _SingleDialogLoad on _SingleDialogStateBase {
   Future<void> _preloadStocks() async {
     try {
+      double numOf(dynamic v) =>
+          (v is num) ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0.0;
+      bool? boolOf(Map<String, dynamic> map, String key) {
+        if (!map.containsKey(key)) return null;
+        final raw = map[key];
+        if (raw is bool) return raw;
+        if (raw is num) return raw != 0;
+        final s = raw?.toString().trim().toLowerCase();
+        if (s == 'true' || s == '1' || s == 'yes') return true;
+        if (s == 'false' || s == '0' || s == 'no') return false;
+        return null;
+      }
+      double numFrom(Map<String, dynamic> map, List<String> keys) {
+        for (final key in keys) {
+          if (map.containsKey(key)) return numOf(map[key]);
+        }
+        return 0.0;
+      }
       final db = FirebaseFirestore.instance;
       final futures = <Future<void>>[];
       for (final v in widget.group.variants.values) {
@@ -12,21 +30,27 @@ mixin _SingleDialogLoad on _SingleDialogStateBase {
             double stock = 0.0;
             double spicesPrice = 0.0;
             double spicesCost = 0.0;
+            double ginsengPrice = 0.0;
+            double ginsengCost = 0.0;
+            bool? spicedEnabled;
+            bool? ginsengEnabled;
             if (m != null) {
-              final s = m['stock'];
-              stock = (s is num) ? s.toDouble() : double.tryParse('$s') ?? 0.0;
-              final spP = m['spicesPrice'];
-              final spC = m['spicesCost'];
-              spicesPrice = (spP is num)
-                  ? spP.toDouble()
-                  : double.tryParse('$spP') ?? 0.0;
-              spicesCost = (spC is num)
-                  ? spC.toDouble()
-                  : double.tryParse('$spC') ?? 0.0;
+              stock = numOf(m['stock']);
+              spicesPrice =
+                  numFrom(m, ['spicePricePerKg', 'spicesPrice']);
+              spicesCost = numFrom(m, ['spiceCostPerKg', 'spicesCost']);
+              ginsengPrice = numFrom(m, ['ginsengPricePerKg']);
+              ginsengCost = numFrom(m, ['ginsengCostPerKg']);
+              spicedEnabled = boolOf(m, 'spicedEnabled');
+              ginsengEnabled = boolOf(m, 'ginsengEnabled');
             }
             _stockByVariantId[v.id] = stock;
             _spicesPriceByVariantId[v.id] = spicesPrice;
             _spicesCostByVariantId[v.id] = spicesCost;
+            _spicedEnabledByVariantId[v.id] = spicedEnabled;
+            _ginsengEnabledByVariantId[v.id] = ginsengEnabled;
+            _ginsengPricePerKgByVariantId[v.id] = ginsengPrice;
+            _ginsengCostPerKgByVariantId[v.id] = ginsengCost;
           }),
         );
       }

@@ -3,7 +3,7 @@ part of 'single_dialog.dart';
 mixin _SingleDialogComponents on _SingleDialogStateBase {
   @override
   Widget _ginsengCard() {
-    if (!_canSpice) return const SizedBox.shrink();
+    if (!_ginsengEnabled) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

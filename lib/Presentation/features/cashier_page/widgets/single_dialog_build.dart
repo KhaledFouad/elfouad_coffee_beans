@@ -81,7 +81,15 @@ mixin _SingleDialogBuild on _SingleDialogStateBase {
                                         ? null
                                         : (v) {
                                             if (!v) return;
-                                            setState(() => _roast = r);
+                                            setState(() {
+                                              _roast = r;
+                                              if (!_canSpice) {
+                                                _isSpiced = false;
+                                              }
+                                              if (!_ginsengEnabled) {
+                                                _ginsengGrams = 0;
+                                              }
+                                            });
                                           },
                                     materialTapTargetSize:
                                         MaterialTapTargetSize.shrinkWrap,
@@ -135,8 +143,10 @@ mixin _SingleDialogBuild on _SingleDialogStateBase {
                           const SizedBox(height: 12),
 
                           // === Ginseng add-on ===
-                          _ginsengCard(),
-                          const SizedBox(height: 12),
+                          if (_ginsengEnabled) ...[
+                            _ginsengCard(),
+                            const SizedBox(height: 12),
+                          ],
 
                           // ??? ??????
                           Align(

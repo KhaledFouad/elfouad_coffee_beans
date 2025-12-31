@@ -72,10 +72,14 @@ abstract class _BlendDialogStateBase extends State<BlendDialog> {
 
   Map<String, double> get _spicesPricePerKgById;
   Map<String, double> get _spicesCostPerKgById;
-  Map<String, bool> get _supportsSpiceById;
+  Map<String, bool?> get _spicedEnabledById;
+  Map<String, bool?> get _ginsengEnabledById;
+  Map<String, double> get _ginsengPricePerKgById;
+  Map<String, double> get _ginsengCostPerKgById;
 
   BlendVariant? get _selected;
   bool get _canSpice;
+  bool get _ginsengEnabled;
   double get _sellPerKg;
   double get _pricePerG;
   int get _gramsEffective;
@@ -83,6 +87,8 @@ abstract class _BlendDialogStateBase extends State<BlendDialog> {
   double get _totalCost;
   double get _spicesPricePerKg;
   double get _spicesCostPerKg;
+  double get _ginsengPricePerKg;
+  double get _ginsengCostPerKg;
 
   Widget _ginsengCard();
   void _openPad(_PadTarget target);
@@ -131,11 +137,9 @@ class _BlendDialogState extends _BlendDialogStateBase
   @override
   bool _isSpiced = false; // محوّج
 
-  // جينسنج (يظهر فقط لو canSpice)
+  // جينسنج (يظهر فقط لو ginsengEnabled)
   @override
   int _ginsengGrams = 0;
-  static const double _ginsengPricePerG = 5.0;
-  static const double _ginsengCostPerG = 4.0;
 
   // من الداتا: تحويج/كجم (سعر/تكلفة) + فلاغ دعم التحويج
   @override
@@ -143,20 +147,14 @@ class _BlendDialogState extends _BlendDialogStateBase
   @override
   final Map<String, double> _spicesCostPerKgById = {};
   @override
-  final Map<String, bool> _supportsSpiceById = {};
+  final Map<String, bool?> _spicedEnabledById = {};
+  @override
+  final Map<String, bool?> _ginsengEnabledById = {};
+  @override
+  final Map<String, double> _ginsengPricePerKgById = {};
+  @override
+  final Map<String, double> _ginsengCostPerKgById = {};
 
-  static const Set<String> _flavored = {
-    'قهوة كراميل',
-    'قهوة بندق',
-    'قهوة بندق قطع',
-    'قهوة شوكلت',
-    'قهوة فانيليا',
-    'قهوة توت',
-    'قهوة فراولة',
-    'قهوة مانجو',
-    'شاي',
-    'شاى',
-  };
 
   int _parseInt(String s) {
     final cleaned = s.replaceAll(RegExp(r'[^0-9]'), '');
@@ -210,21 +208,27 @@ class _BlendDialogState extends _BlendDialogStateBase
     final sel = _selected;
     if (sel == null) return false;
     final id = sel.id;
-    return (_supportsSpiceById[id] == true) ||
-        ((_spicesPricePerKgById[id] ?? 0) > 0) ||
-        ((_spicesCostPerKgById[id] ?? 0) > 0);
+    final flag = _spicedEnabledById[id];
+    final p = _spicesPricePerKgById[id] ?? 0.0;
+    final c = _spicesCostPerKgById[id] ?? 0.0;
+    final hasDelta = p > 0.0 || c > 0.0;
+    return flag ?? hasDelta;
   }
 
   @override
-  bool get _canSpice {
+  bool get _canSpice => _dbSaysCanSpice;
+
+  @override
+  bool get _ginsengEnabled {
     final sel = _selected;
     if (sel == null) return false;
-    final nm = sel.name.trim();
-    if (nm == 'توليفة فرنساوي') return false;
-    if (_flavored.contains(nm)) return false;
-    return _dbSaysCanSpice;
+    final id = sel.id;
+    final flag = _ginsengEnabledById[id];
+    final p = _ginsengPricePerKgById[id] ?? 0.0;
+    final c = _ginsengCostPerKgById[id] ?? 0.0;
+    final hasDelta = p > 0.0 || c > 0.0;
+    return flag ?? hasDelta;
   }
-
   @override
   double get _spicesPricePerKg {
     final sel = _selected;
@@ -242,6 +246,23 @@ class _BlendDialogState extends _BlendDialogStateBase
   double get _spicePricePerG => _spicesPricePerKg / 1000.0;
   double get _spiceCostPerG => _spicesCostPerKg / 1000.0;
 
+
+  @override
+  double get _ginsengPricePerKg {
+    final sel = _selected;
+    if (!_ginsengEnabled || sel == null) return 0.0;
+    return _ginsengPricePerKgById[sel.id] ?? 0.0;
+  }
+
+  @override
+  double get _ginsengCostPerKg {
+    final sel = _selected;
+    if (!_ginsengEnabled || sel == null) return 0.0;
+    return _ginsengCostPerKgById[sel.id] ?? 0.0;
+  }
+
+  double get _ginsengPricePerG => _ginsengPricePerKg / 1000.0;
+  double get _ginsengCostPerG => _ginsengCostPerKg / 1000.0;
   @override
   int get _gramsEffective {
     if (_mode == InputMode.grams) return _grams;
@@ -286,4 +307,7 @@ class _BlendDialogState extends _BlendDialogStateBase
     super.dispose();
   }
 }
+
+
+
 
