@@ -281,12 +281,36 @@ class _ComponentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = component.label;
     final quantity = component.quantityLabel(normalizeUnit);
+    final addons = <String>[];
+    if (component.spiced != null) {
+      addons.add(
+        component.spiced == true
+            ? AppStrings.labelSpiced
+            : AppStrings.labelPlain,
+      );
+    }
+    if (component.ginsengGrams > 0) {
+      addons.add(
+        '${AppStrings.labelGinseng} ${component.ginsengGrams} ${AppStrings.labelGramsShort}',
+      );
+    }
+    final subtitle = addons.isEmpty ? null : addons.join(' • ');
 
     return ListTile(
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       leading: const Icon(Icons.circle, size: 8),
       title: Text(label),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.black54,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

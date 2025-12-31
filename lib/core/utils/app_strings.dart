@@ -137,7 +137,7 @@ class AppStrings {
   static String soldQtyAr(num qty, String itemName) =>
       'تم بيع $qty × $itemName';
 
-  static String stockPiecesEn(num units) => 'Stock: $units';
+  static String stockPiecesEn(num units) => 'المخزون: $units';
 
   static String stockPiecesAr(num units) => 'المخزون الحالي: $units قطعة';
   static String stockNotEnough(num available, String unitLabel) =>
@@ -158,6 +158,7 @@ class AppStrings {
   static const String labelMilk = 'لبن';
   static const String labelWater = 'مياه';
   static const String labelSpiced = 'محوّج';
+  static const String labelPlain = 'سادة';
   static const String labelGinseng = 'جينسنج';
   static const String labelHospitality = 'ضيافة';
   static const String labelPaid = 'مدفوع';

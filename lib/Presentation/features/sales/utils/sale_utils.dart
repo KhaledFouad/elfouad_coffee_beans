@@ -195,17 +195,16 @@ List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
     final unitCost = parseDouble(data['unit_cost']);
     final totalPrice = parseDouble(data['total_price']);
     final totalCost = parseDouble(data['total_cost']);
-    return [
-      SaleComponent(
-        name: name,
-        variant: variant,
-        grams: 0,
-        quantity: quantity,
-        unit: unit,
-        lineTotalPrice: totalPrice > 0 ? totalPrice : unitPrice * quantity,
-        lineTotalCost: totalCost > 0 ? totalCost : unitCost * quantity,
-      ),
-    ];
+    final map = <String, dynamic>{
+      'name': name,
+      'variant': variant,
+      'qty': quantity,
+      'unit': unit,
+      'total_price': totalPrice > 0 ? totalPrice : unitPrice * quantity,
+      'total_cost': totalCost > 0 ? totalCost : unitCost * quantity,
+      'meta': data['meta'],
+    };
+    return [SaleComponent.fromMap(map)];
   }
 
   if (type == 'single' || type == 'ready_blend') {
@@ -214,17 +213,16 @@ List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
     final grams = parseDouble(data['grams']);
     final totalPrice = parseDouble(data['total_price']);
     final totalCost = parseDouble(data['total_cost']);
-    return [
-      SaleComponent(
-        name: name,
-        variant: variant,
-        grams: grams,
-        quantity: 0,
-        unit: 'g',
-        lineTotalPrice: totalPrice,
-        lineTotalCost: totalCost,
-      ),
-    ];
+    final map = <String, dynamic>{
+      'name': name,
+      'variant': variant,
+      'grams': grams,
+      'unit': 'g',
+      'total_price': totalPrice,
+      'total_cost': totalCost,
+      'meta': data['meta'],
+    };
+    return [SaleComponent.fromMap(map)];
   }
 
   if (type == 'extra') {
@@ -237,17 +235,16 @@ List<SaleComponent> extractComponents(Map<String, dynamic> data, String type) {
     final unitCost = parseDouble(data['unit_cost']);
     final totalPrice = parseDouble(data['total_price']);
     final totalCost = parseDouble(data['total_cost']);
-    return [
-      SaleComponent(
-        name: name,
-        variant: variant,
-        grams: 0,
-        quantity: quantity,
-        unit: unit,
-        lineTotalPrice: totalPrice > 0 ? totalPrice : unitPrice * quantity,
-        lineTotalCost: totalCost > 0 ? totalCost : unitCost * quantity,
-      ),
-    ];
+    final map = <String, dynamic>{
+      'name': name,
+      'variant': variant,
+      'qty': quantity,
+      'unit': unit,
+      'total_price': totalPrice > 0 ? totalPrice : unitPrice * quantity,
+      'total_cost': totalCost > 0 ? totalCost : unitCost * quantity,
+      'meta': data['meta'],
+    };
+    return [SaleComponent.fromMap(map)];
   }
 
   return const [];

@@ -9,6 +9,8 @@ class SaleComponent {
     required this.unit,
     required this.lineTotalPrice,
     required this.lineTotalCost,
+    this.spiced,
+    this.ginsengGrams = 0,
   });
 
   final String name;
@@ -18,6 +20,8 @@ class SaleComponent {
   final String unit;
   final double lineTotalPrice;
   final double lineTotalCost;
+  final bool? spiced;
+  final int ginsengGrams;
 
   String get label => variant.isNotEmpty ? '$name - $variant' : name;
 
@@ -40,6 +44,8 @@ class SaleComponent {
     String? unit,
     double? lineTotalPrice,
     double? lineTotalCost,
+    bool? spiced,
+    int? ginsengGrams,
   }) {
     return SaleComponent(
       name: name ?? this.name,
@@ -49,21 +55,48 @@ class SaleComponent {
       unit: unit ?? this.unit,
       lineTotalPrice: lineTotalPrice ?? this.lineTotalPrice,
       lineTotalCost: lineTotalCost ?? this.lineTotalCost,
+      spiced: spiced ?? this.spiced,
+      ginsengGrams: ginsengGrams ?? this.ginsengGrams,
     );
   }
 
   static SaleComponent fromMap(Map<String, dynamic> map) {
+    final meta = map['meta'];
+    final metaMap = meta is Map
+        ? meta.cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final spiced = _readBool(metaMap['spiced'] ?? map['spiced']);
+    final ginseng = _parseInt(metaMap['ginseng_grams'] ?? map['ginseng_grams']);
     return SaleComponent(
-      name: (map['name'] ?? map['item_name'] ?? map['product_name'] ?? '').toString(),
+      name: (map['name'] ?? map['item_name'] ?? map['product_name'] ?? '')
+          .toString(),
       variant: (map['variant'] ?? map['roast'] ?? '').toString(),
       grams: _parseDouble(map['grams'] ?? map['weight']),
       quantity: _parseDouble(map['qty'] ?? map['count']),
       unit: (map['unit'] ?? '').toString(),
-      lineTotalPrice:
-          _parseDouble(map['line_total_price'] ?? map['total_price']),
-      lineTotalCost:
-          _parseDouble(map['line_total_cost'] ?? map['total_cost']),
+      lineTotalPrice: _parseDouble(
+        map['line_total_price'] ?? map['total_price'],
+      ),
+      lineTotalCost: _parseDouble(map['line_total_cost'] ?? map['total_cost']),
+      spiced: spiced,
+      ginsengGrams: ginseng,
     );
+  }
+
+  static bool? _readBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final raw = value.toString().trim().toLowerCase();
+    if (raw == 'true' || raw == '1' || raw == 'yes') return true;
+    if (raw == 'false' || raw == '0' || raw == 'no') return false;
+    return null;
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   static double _parseDouble(dynamic value) {
