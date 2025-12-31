@@ -9,6 +9,7 @@ class SaleComponent {
     required this.unit,
     required this.lineTotalPrice,
     required this.lineTotalCost,
+    this.spicedEnabled,
     this.spiced,
     this.ginsengGrams = 0,
   });
@@ -20,6 +21,7 @@ class SaleComponent {
   final String unit;
   final double lineTotalPrice;
   final double lineTotalCost;
+  final bool? spicedEnabled;
   final bool? spiced;
   final int ginsengGrams;
 
@@ -44,6 +46,7 @@ class SaleComponent {
     String? unit,
     double? lineTotalPrice,
     double? lineTotalCost,
+    bool? spicedEnabled,
     bool? spiced,
     int? ginsengGrams,
   }) {
@@ -55,6 +58,7 @@ class SaleComponent {
       unit: unit ?? this.unit,
       lineTotalPrice: lineTotalPrice ?? this.lineTotalPrice,
       lineTotalCost: lineTotalCost ?? this.lineTotalCost,
+      spicedEnabled: spicedEnabled ?? this.spicedEnabled,
       spiced: spiced ?? this.spiced,
       ginsengGrams: ginsengGrams ?? this.ginsengGrams,
     );
@@ -65,7 +69,13 @@ class SaleComponent {
     final metaMap = meta is Map
         ? meta.cast<String, dynamic>()
         : const <String, dynamic>{};
-    final spiced = _readBool(metaMap['spiced'] ?? map['spiced']);
+    var spicedEnabled =
+        _readBool(metaMap['spicedEnabled'] ?? map['spicedEnabled']);
+    final spicedValue = _readBool(metaMap['spiced'] ?? map['spiced']);
+    if (spicedEnabled == null && spicedValue == true) {
+      spicedEnabled = true;
+    }
+    final spiced = spicedEnabled == true ? (spicedValue ?? false) : null;
     final ginseng = _parseInt(metaMap['ginseng_grams'] ?? map['ginseng_grams']);
     return SaleComponent(
       name: (map['name'] ?? map['item_name'] ?? map['product_name'] ?? '')
@@ -78,6 +88,7 @@ class SaleComponent {
         map['line_total_price'] ?? map['total_price'],
       ),
       lineTotalCost: _parseDouble(map['line_total_cost'] ?? map['total_cost']),
+      spicedEnabled: spicedEnabled,
       spiced: spiced,
       ginsengGrams: ginseng,
     );

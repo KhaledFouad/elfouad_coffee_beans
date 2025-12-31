@@ -327,6 +327,7 @@ class _SingleDialogState extends _SingleDialogStateBase
 
     final meta = <String, dynamic>{
       'spiced': _isSpiced && _canSpice,
+      'spicedEnabled': _canSpice,
       'ginseng_grams': _ginsengGrams,
       'mode': _mode.name,
       'price_per_g_effective': _pricePerG,

@@ -282,7 +282,7 @@ class _ComponentRow extends StatelessWidget {
     final label = component.label;
     final quantity = component.quantityLabel(normalizeUnit);
     final addons = <String>[];
-    if (component.spiced != null) {
+    if (component.spicedEnabled == true) {
       addons.add(
         component.spiced == true
             ? AppStrings.labelSpiced

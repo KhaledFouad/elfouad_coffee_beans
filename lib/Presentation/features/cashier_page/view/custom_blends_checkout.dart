@@ -101,6 +101,7 @@ mixin _CustomBlendsCheckout on _CustomBlendsStateBase {
       'components': components,
       'custom_title': customTitle,
       'spiced': _isSpiced && _canSpiceAny,
+      'spicedEnabled': _canSpiceAny,
       'ginseng_grams': _ginsengGrams,
       'ginseng_price_per_g': _CustomBlendsPageState._ginsengPricePerG,
       'ginseng_cost_per_g': _CustomBlendsPageState._ginsengCostPerG,
