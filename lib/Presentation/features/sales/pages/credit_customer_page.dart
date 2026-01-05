@@ -99,6 +99,14 @@ class _CreditCustomerPageState extends State<CreditCustomerPage> {
     return null;
   }
 
+  Object _unwrapError(Object error) {
+    try {
+      final inner = (error as dynamic).error;
+      if (inner != null) return inner;
+    } catch (_) {}
+    return error;
+  }
+
   Future<void> _handlePaySale(SaleRecord record) async {
     if (_busy) return;
     final due = record.outstandingAmount;
@@ -133,9 +141,10 @@ class _CreditCustomerPageState extends State<CreditCustomerPage> {
         );
       }
     } catch (error) {
+      final unboxed = _unwrapError(error);
       if (mounted) {
         messenger.showSnackBar(
-          SnackBar(content: Text(AppStrings.deferredSettleFailed(error))),
+          SnackBar(content: Text(unboxed.toString())),
         );
       }
     } finally {
@@ -177,9 +186,10 @@ class _CreditCustomerPageState extends State<CreditCustomerPage> {
         );
       }
     } catch (error) {
+      final unboxed = _unwrapError(error);
       if (mounted) {
         messenger.showSnackBar(
-          SnackBar(content: Text(AppStrings.deferredSettleFailed(error))),
+          SnackBar(content: Text(unboxed.toString())),
         );
       }
     } finally {

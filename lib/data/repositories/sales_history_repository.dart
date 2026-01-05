@@ -20,6 +20,9 @@ class SalesHistoryRepository {
 
   static const int pageSize = 30;
 
+  bool _isCreditHidden(Map<String, dynamic> data) =>
+      data['credit_hidden'] == true;
+
   // صفحة واحدة (للـ List مع "عرض المزيد")
   Future<SalesPageResult> fetchPage({
     required DateTimeRange range,
@@ -218,7 +221,9 @@ class SalesHistoryRepository {
       combined[doc.id] = doc;
     }
 
-    return combined.values.toList();
+    return combined.values
+        .where((doc) => !_isCreditHidden(doc.data()))
+        .toList();
   }
 
   Future<List<String>> fetchCreditCustomerNames() async {
@@ -259,20 +264,30 @@ class SalesHistoryRepository {
         .collection('sales')
         .where('is_deferred', isEqualTo: true)
         .where('paid', isEqualTo: false)
-        .count()
         .get();
 
     final creditFuture = _firestore
         .collection('sales')
         .where('is_credit', isEqualTo: true)
         .where('paid', isEqualTo: false)
-        .count()
         .get();
 
     final results = await Future.wait([deferredFuture, creditFuture]);
-    final deferredCount = results[0].count ?? 0;
-    final creditCount = results[1].count ?? 0;
-    return deferredCount + creditCount;
+    final deferredSnap = results[0];
+    final creditSnap = results[1];
+
+    final combined =
+        <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final doc in deferredSnap.docs) {
+      combined[doc.id] = doc;
+    }
+    for (final doc in creditSnap.docs) {
+      combined[doc.id] = doc;
+    }
+
+    return combined.values
+        .where((doc) => !_isCreditHidden(doc.data()))
+        .length;
   }
 
   Future<void> deleteCreditCustomer(String customerName) async {
@@ -374,13 +389,22 @@ class SalesHistoryRepository {
       ..sort((a, b) => _createdAtOf(a).compareTo(_createdAtOf(b)));
 
     await _firestore.runTransaction((transaction) async {
+      final live = <DocumentReference<Map<String, dynamic>>,
+          DocumentSnapshot<Map<String, dynamic>>>{};
+      for (final doc in docs) {
+        live[doc.reference] = await transaction.get(doc.reference);
+      }
+
       var remaining = amount;
+      final now = Timestamp.now();
+      final updates = <MapEntry<DocumentReference<Map<String, dynamic>>,
+          Map<String, dynamic>>>[];
 
       for (final doc in docs) {
         if (remaining <= 0) break;
-        final liveSnap = await transaction.get(doc.reference);
-        if (!liveSnap.exists) continue;
-        final data = liveSnap.data() as Map<String, dynamic>;
+        final liveSnap = live[doc.reference];
+        if (liveSnap == null || !liveSnap.exists) continue;
+        final data = liveSnap.data() ?? <String, dynamic>{};
         final dueAmount = _resolveDueAmount(data);
         if (dueAmount <= 0) continue;
 
@@ -391,20 +415,25 @@ class SalesHistoryRepository {
         final newDue =
             (dueAmount - applied).clamp(0.0, totalPrice).toDouble();
         final isPaid = newDue <= 0;
-        final now = Timestamp.now();
         final paymentEvents = _appendPaymentEvent(data, applied, now);
 
         remaining -= applied;
 
-        transaction.update(doc.reference, {
-          'is_deferred': true,
-          'paid': isPaid,
-          'due_amount': newDue,
-          if (isPaid) 'settled_at': FieldValue.serverTimestamp(),
-          'last_payment_at': now,
-          'last_payment_amount': applied,
-          'payment_events': paymentEvents,
-        });
+        updates.add(
+          MapEntry(doc.reference, {
+            'is_deferred': true,
+            'paid': isPaid,
+            'due_amount': newDue,
+            if (isPaid) 'settled_at': FieldValue.serverTimestamp(),
+            'last_payment_at': now,
+            'last_payment_amount': applied,
+            'payment_events': paymentEvents,
+          }),
+        );
+      }
+
+      for (final update in updates) {
+        transaction.update(update.key, update.value);
       }
     });
   }

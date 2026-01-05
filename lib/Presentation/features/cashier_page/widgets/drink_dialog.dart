@@ -154,6 +154,19 @@ class _DrinkDialogState extends _DrinkDialogStateBase
     return double.tryParse(v?.toString() ?? '') ?? def;
   }
 
+  double _numFromMap(
+    Map<String, dynamic> source,
+    List<String> keys, [
+    double def = 0.0,
+  ]) {
+    for (final key in keys) {
+      if (!source.containsKey(key)) continue;
+      final raw = source[key];
+      if (_isNum(raw)) return _numOf(raw, def);
+    }
+    return def;
+  }
+
   bool _readBool(dynamic v) {
     if (v is bool) return v;
     if (v is num) return v != 0;
@@ -206,6 +219,33 @@ class _DrinkDialogState extends _DrinkDialogStateBase
       if (!result.contains(value)) result.add(value);
     }
     return result;
+  }
+
+  Map<String, dynamic> _resolveLegacyUsedItem() {
+    for (final key in const ['usedItem', 'used_item', 'ingredient', 'item']) {
+      if (!widget.drinkData.containsKey(key)) continue;
+      final item = _mapOf(widget.drinkData[key]);
+      if (item.isNotEmpty) return item;
+    }
+    return const <String, dynamic>{};
+  }
+
+  double _resolveAmountByVariant(Map<String, dynamic> amounts, String variant) {
+    if (amounts.isEmpty) return 0.0;
+    final normalizedVariant = variant.trim().toLowerCase();
+    double? fallback;
+    for (final entry in amounts.entries) {
+      final key = entry.key.toString().trim();
+      final value = entry.value;
+      if (fallback == null && _isNum(value)) {
+        fallback = _numOf(value);
+      }
+      if (normalizedVariant.isNotEmpty &&
+          key.toLowerCase() == normalizedVariant) {
+        return _numOf(value);
+      }
+    }
+    return fallback ?? 0.0;
   }
 
   // --------- getters آمنة ---------
@@ -413,6 +453,35 @@ class _DrinkDialogState extends _DrinkDialogStateBase
     return _numOf(usage['usedAmount']);
   }
 
+  double _resolveLegacyUsedAmount(String variant) {
+    final byVariant = _mapOf(
+      widget.drinkData['usedAmountByVariant'] ??
+          widget.drinkData['used_amount_by_variant'],
+    );
+    if (byVariant.isNotEmpty) {
+      return _resolveAmountByVariant(byVariant, variant);
+    }
+    return _numFromMap(widget.drinkData, [
+      'usedAmount',
+      'used_amount',
+      'used_grams',
+      'grams_per_cup',
+      'gramsPerCup',
+    ]);
+  }
+
+  void _warnMissingLegacyIngredient() {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Ingredient is not configured for this drink; stock will not be updated.',
+        ),
+      ),
+    );
+  }
+
   /// يبني CartLine للمشروب
   @override
   CartLine _buildCartLine() {
@@ -426,10 +495,24 @@ class _DrinkDialogState extends _DrinkDialogStateBase
     final unitPrice = _isComplimentary ? 0.0 : _unitPriceEffective;
 
     final usage = _selectedRoastUsage();
-    final perUnitConsumption = _resolveUsedAmount(usage, _variant.trim());
+    final variant = _variant.trim();
+    final consumptionSource = usage == null ? 'legacyUsedItem' : 'roastUsage';
+    double perUnitConsumption =
+        usage == null
+            ? _resolveLegacyUsedAmount(variant)
+            : _resolveUsedAmount(usage, variant);
+    if (usage == null && _supportsServingChoice && _serving == Serving.dbl) {
+      final doubleAmount = _doubleUsedAmount;
+      if (doubleAmount > 0) {
+        perUnitConsumption = doubleAmount;
+      } else {
+        perUnitConsumption = perUnitConsumption * 2.0;
+      }
+    }
     final totalConsumption = perUnitConsumption * _qty;
 
-    final usedItem = usage == null ? const <String, dynamic>{} : _mapOf(usage['usedItem']);
+    final usedItem =
+        usage == null ? _resolveLegacyUsedItem() : _mapOf(usage['usedItem']);
     final usedCollection = (usedItem['collection'] ?? '').toString().trim();
     final usedId = (usedItem['id'] ?? '').toString().trim();
     final usedName = (usedItem['name'] ?? '').toString().trim();
@@ -438,8 +521,16 @@ class _DrinkDialogState extends _DrinkDialogStateBase
         ? null
         : (usedVariant.isNotEmpty ? '$usedName - $usedVariant' : usedName);
 
+    if (usage == null &&
+        perUnitConsumption > 0 &&
+        (usedCollection.isEmpty || usedId.isEmpty)) {
+      _warnMissingLegacyIngredient();
+    }
+
     final impacts = <StockImpact>[];
-    if (totalConsumption > 0 && usedCollection.isNotEmpty && usedId.isNotEmpty) {
+    if (totalConsumption > 0 &&
+        usedCollection.isNotEmpty &&
+        usedId.isNotEmpty) {
       impacts.add(
         StockImpact(
           collection: usedCollection,
@@ -452,7 +543,7 @@ class _DrinkDialogState extends _DrinkDialogStateBase
     }
 
     final meta = <String, dynamic>{
-      'variant': _variant.trim(),
+      'variant': variant,
       'roast': _roast.trim(),
       'spiced': _spicedEnabled ? _spiced : false,
       'spicedEnabled': _spicedEnabled,
@@ -470,6 +561,7 @@ class _DrinkDialogState extends _DrinkDialogStateBase
       if (_showLegacyMix) 'mix': _mix,
       if (totalConsumption > 0)
         'consumption': {
+          'source': consumptionSource,
           'collection': usedCollection,
           'id': usedId,
           'name': usedName,
