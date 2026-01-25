@@ -366,6 +366,10 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
     }
 
     accounts.sort((a, b) {
+      final aHasUnpaid = a.unpaidCount > 0;
+      final bHasUnpaid = b.unpaidCount > 0;
+      if (aHasUnpaid != bHasUnpaid) return aHasUnpaid ? -1 : 1;
+
       final aAt = lastPaymentByName[a.name];
       final bAt = lastPaymentByName[b.name];
       if (aAt == null && bAt == null) return a.name.compareTo(b.name);
