@@ -69,6 +69,7 @@ class ExtrasPage extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('extras')
             .where('category', isEqualTo: 'biscuits')
+            .orderBy('posOrder')
             .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
@@ -98,11 +99,14 @@ class ExtrasPage extends StatelessWidget {
                   : double.tryParse('${v ?? ''}') ?? 0.0;
               int intValue(v) =>
                   (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+              int posOrderValue(v) =>
+                  (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 999999;
 
               final priceSell = numValue(data['price_sell']);
               final costUnit = numValue(data['cost_unit']);
               final stock = intValue(data['stock_units']);
               final variant = (data['variant'] as String?)?.trim();
+              final posOrder = posOrderValue(data['posOrder']);
 
               return _ExtraItem(
                 id: doc.id,
@@ -112,31 +116,16 @@ class ExtrasPage extends StatelessWidget {
                 costUnit: costUnit,
                 stockUnits: stock,
                 variant: variant,
+                posOrder: posOrder,
                 raw: data,
               );
             }).toList();
 
-            // === ترتيب مخصص: حسب أصنافك، ثم أبجديًا ===
-            const preferredOrderExtras = <String>[
-              'تمر دارك شوكلت',
-              'تمر وايت شوكلت',
-              'معمول سادة',
-              'معمول تمر',
-              'معمول قرفة',
-              'معمول وايت شوكلت',
-              'معمول دارك شوكلت',
-            ];
-            final rank = <String, int>{
-              for (var i = 0; i < preferredOrderExtras.length; i++)
-                preferredOrderExtras[i]: i,
-            };
             items.sort((a, b) {
-              final ra = rank[a.name] ?? 1 << 20;
-              final rb = rank[b.name] ?? 1 << 20;
-              if (ra != rb) return ra.compareTo(rb);
-              return a.name.compareTo(b.name);
+              final order = a.posOrder.compareTo(b.posOrder);
+              if (order != 0) return order;
+              return a.name.toLowerCase().compareTo(b.name.toLowerCase());
             });
-            // === نهاية الترتيب ===
           } catch (e, st) {
             logError(e, st);
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -202,6 +191,7 @@ class _ExtraItem {
   final double costUnit;
   final int stockUnits;
   final String? variant;
+  final int posOrder;
   final Map<String, dynamic> raw;
   _ExtraItem({
     required this.id,
@@ -211,6 +201,7 @@ class _ExtraItem {
     required this.costUnit,
     required this.stockUnits,
     required this.variant,
+    required this.posOrder,
     required this.raw,
   });
 }

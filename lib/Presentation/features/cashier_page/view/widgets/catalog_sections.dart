@@ -15,13 +15,19 @@ import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 
 import 'catalog_widgets.dart';
 
+int _posOrderValue(dynamic v) =>
+    (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 999999;
+
 class DrinksGrid extends StatelessWidget {
   const DrinksGrid({super.key, required this.query, required this.onAdd});
 
   final String query;
   final ValueChanged<CartLine> onAdd;
   static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
-      FirebaseFirestore.instance.collection('drinks').snapshots();
+      FirebaseFirestore.instance
+          .collection('drinks')
+          .orderBy('posOrder')
+          .snapshots();
 
   @override
   Widget build(BuildContext context) {
@@ -49,11 +55,13 @@ class DrinksGrid extends StatelessWidget {
                   final sellPrice = (data['sellPrice'] is num)
                       ? (data['sellPrice'] as num).toDouble()
                       : double.tryParse('${data['sellPrice'] ?? 0}') ?? 0.0;
+                  final posOrder = _posOrderValue(data['posOrder']);
                   return (
                     id: doc.id,
                     name: name,
                     image: image,
                     price: sellPrice,
+                    posOrder: posOrder,
                     data: data,
                   );
                 })
@@ -61,8 +69,15 @@ class DrinksGrid extends StatelessWidget {
                   if (q.isEmpty) return true;
                   return d.name.toLowerCase().contains(q);
                 })
-                .toList()
-              ..sort((a, b) => a.name.compareTo(b.name));
+                .toList();
+        items.sort((a, b) {
+          final order = a.posOrder.compareTo(b.posOrder);
+          if (order != 0) return order;
+          final nameCmp =
+              a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          if (nameCmp != 0) return nameCmp;
+          return a.id.compareTo(b.id);
+        });
 
         final cards = items
             .map(
@@ -102,7 +117,10 @@ class SinglesGrid extends StatelessWidget {
   final String query;
   final ValueChanged<CartLine> onAdd;
   static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
-      FirebaseFirestore.instance.collection('singles').snapshots();
+      FirebaseFirestore.instance
+          .collection('singles')
+          .orderBy('posOrder')
+          .snapshots();
 
   @override
   Widget build(BuildContext context) {
@@ -125,6 +143,7 @@ class SinglesGrid extends StatelessWidget {
           final name = (data['name'] ?? '').toString();
           final image = (data['image'] ?? 'assets/singles.jpg').toString();
           final variant = (data['variant'] ?? '').toString().trim();
+          final posOrder = _posOrderValue(data['posOrder']);
 
           final sellPerKg = (data['sellPricePerKg'] is num)
               ? (data['sellPricePerKg'] as num).toDouble()
@@ -136,12 +155,27 @@ class SinglesGrid extends StatelessWidget {
                     0.0;
           final unit = (data['unit'] ?? 'g').toString();
 
-          groups.putIfAbsent(name, () => SingleGroup(name: name, image: image));
+          if (!groups.containsKey(name)) {
+            groups[name] = SingleGroup(
+              name: name,
+              image: image,
+              posOrder: posOrder,
+            );
+          } else if (posOrder < groups[name]!.posOrder) {
+            final existing = groups[name]!;
+            groups[name] = SingleGroup(
+              name: existing.name,
+              image: existing.image,
+              posOrder: posOrder,
+              variants: existing.variants,
+            );
+          }
           groups[name]!.variants[variant] = SingleVariant(
             id: doc.id,
             name: name,
             variant: variant,
             image: image,
+            posOrder: posOrder,
             sellPricePerKg: sellPerKg,
             costPricePerKg: costPerKg,
             unit: unit,
@@ -153,7 +187,11 @@ class SinglesGrid extends StatelessWidget {
             groups.values
                 .where((g) => q.isEmpty || g.name.toLowerCase().contains(q))
                 .toList()
-              ..sort((a, b) => a.name.compareTo(b.name));
+              ..sort((a, b) {
+                final order = a.posOrder.compareTo(b.posOrder);
+                if (order != 0) return order;
+                return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+              });
 
         final cards = items
             .map(
@@ -192,7 +230,10 @@ class BlendsGrid extends StatelessWidget {
   final String query;
   final ValueChanged<CartLine> onAdd;
   static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
-      FirebaseFirestore.instance.collection('blends').snapshots();
+      FirebaseFirestore.instance
+          .collection('blends')
+          .orderBy('posOrder')
+          .snapshots();
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +256,7 @@ class BlendsGrid extends StatelessWidget {
           final name = (data['name'] ?? '').toString();
           final image = (data['image'] ?? 'assets/blends.jpg').toString();
           final variant = (data['variant'] ?? '').toString().trim();
+          final posOrder = _posOrderValue(data['posOrder']);
 
           final sellPerKg = (data['sellPricePerKg'] is num)
               ? (data['sellPricePerKg'] as num).toDouble()
@@ -230,13 +272,28 @@ class BlendsGrid extends StatelessWidget {
               ? (data['stock'] as num).toDouble()
               : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
 
-          groups.putIfAbsent(name, () => BlendGroup(name: name, image: image));
+          if (!groups.containsKey(name)) {
+            groups[name] = BlendGroup(
+              name: name,
+              image: image,
+              posOrder: posOrder,
+            );
+          } else if (posOrder < groups[name]!.posOrder) {
+            final existing = groups[name]!;
+            groups[name] = BlendGroup(
+              name: existing.name,
+              image: existing.image,
+              posOrder: posOrder,
+              variants: existing.variants,
+            );
+          }
 
           groups[name]!.variants[variant] = BlendVariant(
             id: doc.id,
             name: name,
             variant: variant,
             image: image,
+            posOrder: posOrder,
             sellPricePerKg: sellPerKg,
             costPricePerKg: costPerKg,
             unit: unit,
@@ -249,7 +306,11 @@ class BlendsGrid extends StatelessWidget {
             groups.values
                 .where((g) => q.isEmpty || g.name.toLowerCase().contains(q))
                 .toList()
-              ..sort((a, b) => a.name.compareTo(b.name));
+              ..sort((a, b) {
+                final order = a.posOrder.compareTo(b.posOrder);
+                if (order != 0) return order;
+                return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+              });
 
         final cards = items
             .map(
@@ -291,6 +352,7 @@ class ExtrasGrid extends StatelessWidget {
       FirebaseFirestore.instance
           .collection('extras')
           .where('category', isEqualTo: 'الإضافات')
+          .orderBy('posOrder')
           .snapshots();
 
   @override
@@ -321,6 +383,7 @@ class ExtrasGrid extends StatelessWidget {
                       : double.tryParse('${v ?? ''}') ?? 0.0;
                   int intValue(v) =>
                       (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+                  final posOrder = _posOrderValue(data['posOrder']);
 
                   final priceSell = numValue(data['price_sell']);
                   final stock = intValue(data['stock_units']);
@@ -331,6 +394,7 @@ class ExtrasGrid extends StatelessWidget {
                     image: image,
                     price: priceSell,
                     stock: stock,
+                    posOrder: posOrder,
                     raw: data,
                   );
                 })
@@ -339,7 +403,11 @@ class ExtrasGrid extends StatelessWidget {
                   return it.name.toLowerCase().contains(q);
                 })
                 .toList()
-              ..sort((a, b) => a.name.compareTo(b.name));
+              ..sort((a, b) {
+                final order = a.posOrder.compareTo(b.posOrder);
+                if (order != 0) return order;
+                return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+              });
 
         final cards = items
             .map(

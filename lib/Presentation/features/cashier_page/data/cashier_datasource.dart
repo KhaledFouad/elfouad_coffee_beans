@@ -4,6 +4,23 @@ import 'package:elfouad_coffee_beans/core/utils/app_strings.dart';
 class CashierDataSource {
   final _firestore = FirebaseFirestore.instance;
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> drinksStream() =>
+      _firestore.collection('drinks').orderBy('posOrder').snapshots();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> blendsStream() =>
+      _firestore.collection('blends').orderBy('posOrder').snapshots();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> singlesStream() =>
+      _firestore.collection('singles').orderBy('posOrder').snapshots();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> extrasStream({String? category}) {
+    Query<Map<String, dynamic>> q = _firestore.collection('extras');
+    if (category != null) {
+      q = q.where('category', isEqualTo: category);
+    }
+    return q.orderBy('posOrder').snapshots();
+  }
+
   Future<void> registerSale(String productId, int quantity) async {
     final docRef = _firestore.collection('products').doc(productId);
 

@@ -65,7 +65,11 @@ class DrinksPage extends StatelessWidget {
       ),
 
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('drinks').snapshots(),
+        stream:
+            FirebaseFirestore.instance
+                .collection('drinks')
+                .orderBy('posOrder')
+                .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -84,6 +88,8 @@ class DrinksPage extends StatelessWidget {
 
           late final List<_DrinkItem> items;
           try {
+            int posOrderValue(v) =>
+                (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 999999;
             items = snap.data!.docs.map((doc) {
               final data = doc.data();
               final name = (data['name'] ?? '').toString();
@@ -93,39 +99,25 @@ class DrinksPage extends StatelessWidget {
                   ? (data['sellPrice'] as num).toDouble()
                   : double.tryParse((data['sellPrice'] ?? '0').toString()) ??
                         0.0;
+              final posOrder = posOrderValue(data['posOrder']);
 
               return _DrinkItem(
                 id: doc.id,
                 name: name,
                 image: image,
+                posOrder: posOrder,
                 data: {...data, 'unit': unit, 'sellPrice': sellPrice},
               );
             }).toList();
 
-            // === Custom sort: preferred order first, then alphabetical ===
-            const preferredOrderDrinks = <String>[
-              'قهوة تركي',
-              'قهوة فرنساوي',
-              'قهوة اسبريسو',
-              'قهوة بندق قطع',
-              'شاي',
-              'مياه',
-              'كوفي ميكس',
-              'لاتيه',
-              'كابتشينو',
-              'نسكافيه',
-            ];
-            final rankDrinks = <String, int>{
-              for (var i = 0; i < preferredOrderDrinks.length; i++)
-                preferredOrderDrinks[i]: i,
-            };
             items.sort((a, b) {
-              final ra = rankDrinks[a.name] ?? 1 << 20;
-              final rb = rankDrinks[b.name] ?? 1 << 20;
-              if (ra != rb) return ra.compareTo(rb);
-              return a.name.compareTo(b.name);
+              final order = a.posOrder.compareTo(b.posOrder);
+              if (order != 0) return order;
+              final nameCmp =
+                  a.name.toLowerCase().compareTo(b.name.toLowerCase());
+              if (nameCmp != 0) return nameCmp;
+              return a.id.compareTo(b.id);
             });
-            // === End custom sort ===
           } catch (e, st) {
             logError(e, st);
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -183,11 +175,13 @@ class _DrinkItem {
   final String id;
   final String name;
   final String image;
+  final int posOrder;
   final Map<String, dynamic> data;
   _DrinkItem({
     required this.id,
     required this.name,
     required this.image,
+    required this.posOrder,
     required this.data,
   });
 }

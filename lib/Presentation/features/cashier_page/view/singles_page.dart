@@ -63,7 +63,11 @@ class SinglesPage extends StatelessWidget {
         ),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('singles').snapshots(),
+        stream:
+            FirebaseFirestore.instance
+                .collection('singles')
+                .orderBy('posOrder')
+                .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -87,6 +91,9 @@ class SinglesPage extends StatelessWidget {
             final name = (data['name'] ?? '').toString();
             final image = (data['image'] ?? 'assets/singles.jpg').toString();
             final variant = (data['variant'] ?? '').toString().trim();
+            final posOrder = (data['posOrder'] is num)
+                ? (data['posOrder'] as num).toInt()
+                : int.tryParse('${data['posOrder'] ?? ''}') ?? 999999;
 
             final sellPerKg = (data['sellPricePerKg'] is num)
                 ? (data['sellPricePerKg'] as num).toDouble()
@@ -100,23 +107,40 @@ class SinglesPage extends StatelessWidget {
 
             final unit = (data['unit'] ?? 'g').toString();
 
-            groups.putIfAbsent(
-              name,
-              () => SingleGroup(name: name, image: image),
-            );
+            if (!groups.containsKey(name)) {
+              groups[name] = SingleGroup(
+                name: name,
+                image: image,
+                posOrder: posOrder,
+              );
+            } else if (posOrder < groups[name]!.posOrder) {
+              final existing = groups[name]!;
+              groups[name] = SingleGroup(
+                name: existing.name,
+                image: existing.image,
+                posOrder: posOrder,
+                variants: existing.variants,
+              );
+            }
 
             groups[name]!.variants[variant] = SingleVariant(
               id: doc.id,
               name: name,
               variant: variant,
               image: image,
+              posOrder: posOrder,
               sellPricePerKg: sellPerKg,
               costPricePerKg: costPerKg,
               unit: unit,
             );
           }
 
-          final items = groups.values.toList();
+          final items = groups.values.toList()
+            ..sort((a, b) {
+              final order = a.posOrder.compareTo(b.posOrder);
+              if (order != 0) return order;
+              return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+            });
 
           return LayoutBuilder(
             builder: (context, c) {

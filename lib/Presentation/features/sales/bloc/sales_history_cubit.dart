@@ -19,9 +19,18 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
   final SalesHistoryRepository _repository;
 
   QueryDocumentSnapshot<Map<String, dynamic>>? _lastDoc;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _deferredSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _creditSub;
+  Timer? _creditCountDebounce;
+  final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>>
+      _pendingDeferredDocs = {};
+  final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>>
+      _pendingCreditDocs = {};
+  static const Duration _creditCountDebounceDuration =
+      Duration(milliseconds: 300);
 
   Future<void> initialize() async {
-    unawaited(_loadCreditUnpaidCount());
+    _startRealtimeCreditUnpaidCount();
     await _loadFirstPage();
   }
 
@@ -169,6 +178,43 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
     }
   }
 
+  void _startRealtimeCreditUnpaidCount() {
+    _deferredSub?.cancel();
+    _creditSub?.cancel();
+    _pendingDeferredDocs.clear();
+    _pendingCreditDocs.clear();
+    emit(state.copyWith(isCreditCountLoading: true));
+
+    final sales = FirebaseFirestore.instance.collection('sales');
+    _deferredSub = sales
+        .where('is_deferred', isEqualTo: true)
+        .where('paid', isEqualTo: false)
+        .snapshots()
+        .listen(
+          (snap) {
+            _pendingDeferredDocs
+              ..clear()
+              ..addEntries(snap.docs.map((doc) => MapEntry(doc.id, doc)));
+            _scheduleCreditCountEmit();
+          },
+          onError: (_) => _scheduleCreditCountEmit(),
+        );
+
+    _creditSub = sales
+        .where('is_credit', isEqualTo: true)
+        .where('paid', isEqualTo: false)
+        .snapshots()
+        .listen(
+          (snap) {
+            _pendingCreditDocs
+              ..clear()
+              ..addEntries(snap.docs.map((doc) => MapEntry(doc.id, doc)));
+            _scheduleCreditCountEmit();
+          },
+          onError: (_) => _scheduleCreditCountEmit(),
+        );
+  }
+
   Future<void> _loadCreditUnpaidCount() async {
     if (state.isCreditCountLoading) return;
     emit(state.copyWith(isCreditCountLoading: true));
@@ -178,6 +224,30 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
     } finally {
       emit(state.copyWith(isCreditCountLoading: false));
     }
+  }
+
+  void _scheduleCreditCountEmit() {
+    _creditCountDebounce?.cancel();
+    _creditCountDebounce = Timer(_creditCountDebounceDuration, () {
+      if (isClosed) return;
+      final combined =
+          <String, QueryDocumentSnapshot<Map<String, dynamic>>>{}
+            ..addAll(_pendingDeferredDocs)
+            ..addAll(_pendingCreditDocs);
+      final count = combined.values
+          .where((doc) => !_isCreditHidden(doc.data()))
+          .length;
+      if (state.creditUnpaidCount == count &&
+          state.isCreditCountLoading == false) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          creditUnpaidCount: count,
+          isCreditCountLoading: false,
+        ),
+      );
+    });
   }
 
   Future<void> _loadFullTotalsPerDay(DateTimeRange range) async {
@@ -350,5 +420,16 @@ class SalesHistoryCubit extends Cubit<SalesHistoryState> {
   String _dayKey(DateTime value) {
     final shifted = shiftDayByFourHours(value);
     return '${shifted.year}-${shifted.month.toString().padLeft(2, '0')}-${shifted.day.toString().padLeft(2, '0')}';
+  }
+
+  bool _isCreditHidden(Map<String, dynamic> data) =>
+      data['credit_hidden'] == true;
+
+  @override
+  Future<void> close() {
+    _deferredSub?.cancel();
+    _creditSub?.cancel();
+    _creditCountDebounce?.cancel();
+    return super.close();
   }
 }

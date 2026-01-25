@@ -10,6 +10,7 @@ class ExtraItem {
   final double costUnit; // تكلفة/قطعة
   final int stockUnits; // مخزون بالقطعة
   final bool active;
+  final int posOrder;
 
   ExtraItem({
     required this.id,
@@ -21,6 +22,7 @@ class ExtraItem {
     required this.costUnit,
     required this.stockUnits,
     this.active = true,
+    this.posOrder = 999999,
   });
 
   factory ExtraItem.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
@@ -28,6 +30,8 @@ class ExtraItem {
     double numValue(v) =>
         (v is num) ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0.0;
     int intValue(v) => (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+    int posOrderValue(v) =>
+        (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 999999;
 
     return ExtraItem(
       id: d.id,
@@ -39,6 +43,7 @@ class ExtraItem {
       costUnit: numValue(m['cost_unit']),
       stockUnits: intValue(m['stock_units']),
       active: (m['active'] ?? true) == true,
+      posOrder: posOrderValue(m['posOrder']),
     );
   }
 
@@ -51,6 +56,7 @@ class ExtraItem {
     'cost_unit': costUnit,
     'stock_units': stockUnits,
     'active': active,
+    'posOrder': posOrder,
     'updated_at': FieldValue.serverTimestamp(),
   };
 }

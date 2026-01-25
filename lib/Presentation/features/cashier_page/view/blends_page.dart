@@ -63,7 +63,11 @@ class BlendsPage extends StatelessWidget {
         ),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('blends').snapshots(),
+        stream:
+            FirebaseFirestore.instance
+                .collection('blends')
+                .orderBy('posOrder')
+                .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -87,6 +91,9 @@ class BlendsPage extends StatelessWidget {
             final name = (data['name'] ?? '').toString();
             final image = (data['image'] ?? 'assets/blends.jpg').toString();
             final variant = (data['variant'] ?? '').toString().trim();
+            final posOrder = (data['posOrder'] is num)
+                ? (data['posOrder'] as num).toInt()
+                : int.tryParse('${data['posOrder'] ?? ''}') ?? 999999;
 
             final sellPerKg = (data['sellPricePerKg'] is num)
                 ? (data['sellPricePerKg'] as num).toDouble()
@@ -103,16 +110,28 @@ class BlendsPage extends StatelessWidget {
                 ? (data['stock'] as num).toDouble()
                 : double.tryParse((data['stock'] ?? '0').toString()) ?? 0.0;
 
-            groups.putIfAbsent(
-              name,
-              () => BlendGroup(name: name, image: image),
-            );
+            if (!groups.containsKey(name)) {
+              groups[name] = BlendGroup(
+                name: name,
+                image: image,
+                posOrder: posOrder,
+              );
+            } else if (posOrder < groups[name]!.posOrder) {
+              final existing = groups[name]!;
+              groups[name] = BlendGroup(
+                name: existing.name,
+                image: existing.image,
+                posOrder: posOrder,
+                variants: existing.variants,
+              );
+            }
 
             groups[name]!.variants[variant] = BlendVariant(
               id: doc.id,
               name: name,
               variant: variant,
               image: image,
+              posOrder: posOrder,
               sellPricePerKg: sellPerKg,
               costPricePerKg: costPerKg,
               unit: unit,
@@ -120,31 +139,12 @@ class BlendsPage extends StatelessWidget {
             );
           }
 
-          // === Custom sort: preferred order first, then alphabetical ===
-          const preferredOrderBlends = <String>[
-            'توليفة القهاوى',
-            'توليفة القهاوي',
-            'توليفة كلاسيك',
-            'توليفة مخصوص',
-            'توليفة اسبيشيال',
-            'توليفة الفؤاد',
-            'توليفة اسبريسو',
-            'قهوة بندق قطع',
-            'كوفي ميكس',
-            'هوت شوكلت',
-          ];
-          final rankBlends = <String, int>{
-            for (var i = 0; i < preferredOrderBlends.length; i++)
-              preferredOrderBlends[i]: i,
-          };
-          final items = groups.values.toList()
-            ..sort((a, b) {
-              final ra = rankBlends[a.name] ?? 1 << 20;
-              final rb = rankBlends[b.name] ?? 1 << 20;
-              if (ra != rb) return ra.compareTo(rb);
-              return a.name.compareTo(b.name);
-            });
-          // === End custom sort ===
+          final items = groups.values.toList();
+          items.sort((a, b) {
+            final order = a.posOrder.compareTo(b.posOrder);
+            if (order != 0) return order;
+            return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          });
           return LayoutBuilder(
             builder: (context, c) {
               final max = c.maxWidth;

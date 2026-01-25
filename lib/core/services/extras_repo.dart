@@ -8,13 +8,20 @@ Stream<List<ExtraItem>> extrasStreamByCategory(String category) {
       .collection('extras')
       .where('category', isEqualTo: category)
       .where('active', isEqualTo: true)
-      .orderBy('name'); // قد يطلب Index أول مرة
+      .orderBy('posOrder'); // قد يطلب Index أول مرة
   return q.snapshots().map(
-    (s) => s.docs
-        .map(
-          (d) => ExtraItem.fromDoc(d as DocumentSnapshot<Map<String, dynamic>>),
-        )
-        .toList(),
+    (s) =>
+        s.docs
+            .map(
+              (d) =>
+                  ExtraItem.fromDoc(d as DocumentSnapshot<Map<String, dynamic>>),
+            )
+            .toList()
+          ..sort((a, b) {
+            final order = a.posOrder.compareTo(b.posOrder);
+            if (order != 0) return order;
+            return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          }),
   );
 }
 
