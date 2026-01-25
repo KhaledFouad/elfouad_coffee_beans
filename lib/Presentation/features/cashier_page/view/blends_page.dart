@@ -86,6 +86,8 @@ class BlendsPage extends StatelessWidget {
 
           // تجميع حسب الاسم بدون تكرار الكروت
           final Map<String, BlendGroup> groups = {};
+          final Map<String, int> groupIndex = {};
+          var index = 0;
           for (final doc in snap.data!.docs) {
             final data = doc.data();
             final name = (data['name'] ?? '').toString();
@@ -94,6 +96,7 @@ class BlendsPage extends StatelessWidget {
             final posOrder = (data['posOrder'] is num)
                 ? (data['posOrder'] as num).toInt()
                 : int.tryParse('${data['posOrder'] ?? ''}') ?? 999999;
+            final currentIndex = index++;
 
             final sellPerKg = (data['sellPricePerKg'] is num)
                 ? (data['sellPricePerKg'] as num).toDouble()
@@ -116,6 +119,7 @@ class BlendsPage extends StatelessWidget {
                 image: image,
                 posOrder: posOrder,
               );
+              groupIndex[name] = currentIndex;
             } else if (posOrder < groups[name]!.posOrder) {
               final existing = groups[name]!;
               groups[name] = BlendGroup(
@@ -143,6 +147,11 @@ class BlendsPage extends StatelessWidget {
           items.sort((a, b) {
             final order = a.posOrder.compareTo(b.posOrder);
             if (order != 0) return order;
+            if (a.posOrder == 999999 && b.posOrder == 999999) {
+              return (groupIndex[a.name] ?? 0).compareTo(
+                groupIndex[b.name] ?? 0,
+              );
+            }
             return a.name.toLowerCase().compareTo(b.name.toLowerCase());
           });
           return LayoutBuilder(

@@ -90,29 +90,38 @@ class DrinksPage extends StatelessWidget {
           try {
             int posOrderValue(v) =>
                 (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 999999;
-            items = snap.data!.docs.map((doc) {
-              final data = doc.data();
-              final name = (data['name'] ?? '').toString();
-              final image = (data['image'] ?? 'assets/drinks.jpg').toString();
-              final unit = (data['unit'] ?? 'cup').toString();
-              final sellPrice = (data['sellPrice'] is num)
-                  ? (data['sellPrice'] as num).toDouble()
-                  : double.tryParse((data['sellPrice'] ?? '0').toString()) ??
-                        0.0;
-              final posOrder = posOrderValue(data['posOrder']);
+            items =
+                snap.data!.docs.asMap().entries.map((entry) {
+                  final doc = entry.value;
+                  final data = doc.data();
+                  final name = (data['name'] ?? '').toString();
+                  final image =
+                      (data['image'] ?? 'assets/drinks.jpg').toString();
+                  final unit = (data['unit'] ?? 'cup').toString();
+                  final sellPrice = (data['sellPrice'] is num)
+                      ? (data['sellPrice'] as num).toDouble()
+                      : double.tryParse(
+                            (data['sellPrice'] ?? '0').toString(),
+                          ) ??
+                          0.0;
+                  final posOrder = posOrderValue(data['posOrder']);
 
-              return _DrinkItem(
-                id: doc.id,
-                name: name,
-                image: image,
-                posOrder: posOrder,
-                data: {...data, 'unit': unit, 'sellPrice': sellPrice},
-              );
-            }).toList();
+                  return _DrinkItem(
+                    id: doc.id,
+                    name: name,
+                    image: image,
+                    posOrder: posOrder,
+                    listIndex: entry.key,
+                    data: {...data, 'unit': unit, 'sellPrice': sellPrice},
+                  );
+                }).toList();
 
             items.sort((a, b) {
               final order = a.posOrder.compareTo(b.posOrder);
               if (order != 0) return order;
+              if (a.posOrder == 999999 && b.posOrder == 999999) {
+                return a.listIndex.compareTo(b.listIndex);
+              }
               final nameCmp =
                   a.name.toLowerCase().compareTo(b.name.toLowerCase());
               if (nameCmp != 0) return nameCmp;
@@ -176,12 +185,14 @@ class _DrinkItem {
   final String name;
   final String image;
   final int posOrder;
+  final int listIndex;
   final Map<String, dynamic> data;
   _DrinkItem({
     required this.id,
     required this.name,
     required this.image,
     required this.posOrder,
+    required this.listIndex,
     required this.data,
   });
 }

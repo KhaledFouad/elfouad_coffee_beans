@@ -89,41 +89,50 @@ class ExtrasPage extends StatelessWidget {
 
           late final List<_ExtraItem> items;
           try {
-            items = snap.data!.docs.map((doc) {
-              final data = doc.data();
-              final name = (data['name'] ?? '').toString();
-              final image = (data['image'] ?? 'assets/cookies.png').toString();
+            items =
+                snap.data!.docs.asMap().entries.map((entry) {
+                  final doc = entry.value;
+                  final data = doc.data();
+                  final name = (data['name'] ?? '').toString();
+                  final image =
+                      (data['image'] ?? 'assets/cookies.png').toString();
 
-              double numValue(v) => (v is num)
-                  ? v.toDouble()
-                  : double.tryParse('${v ?? ''}') ?? 0.0;
-              int intValue(v) =>
-                  (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
-              int posOrderValue(v) =>
-                  (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 999999;
+                  double numValue(v) => (v is num)
+                      ? v.toDouble()
+                      : double.tryParse('${v ?? ''}') ?? 0.0;
+                  int intValue(v) =>
+                      (v is num) ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+                  int posOrderValue(v) =>
+                      (v is num)
+                          ? v.toInt()
+                          : int.tryParse('${v ?? ''}') ?? 999999;
 
-              final priceSell = numValue(data['price_sell']);
-              final costUnit = numValue(data['cost_unit']);
-              final stock = intValue(data['stock_units']);
-              final variant = (data['variant'] as String?)?.trim();
-              final posOrder = posOrderValue(data['posOrder']);
+                  final priceSell = numValue(data['price_sell']);
+                  final costUnit = numValue(data['cost_unit']);
+                  final stock = intValue(data['stock_units']);
+                  final variant = (data['variant'] as String?)?.trim();
+                  final posOrder = posOrderValue(data['posOrder']);
 
-              return _ExtraItem(
-                id: doc.id,
-                name: name,
-                image: image,
-                priceSell: priceSell,
-                costUnit: costUnit,
-                stockUnits: stock,
-                variant: variant,
-                posOrder: posOrder,
-                raw: data,
-              );
-            }).toList();
+                  return _ExtraItem(
+                    id: doc.id,
+                    name: name,
+                    image: image,
+                    priceSell: priceSell,
+                    costUnit: costUnit,
+                    stockUnits: stock,
+                    variant: variant,
+                    posOrder: posOrder,
+                    listIndex: entry.key,
+                    raw: data,
+                  );
+                }).toList();
 
             items.sort((a, b) {
               final order = a.posOrder.compareTo(b.posOrder);
               if (order != 0) return order;
+              if (a.posOrder == 999999 && b.posOrder == 999999) {
+                return a.listIndex.compareTo(b.listIndex);
+              }
               return a.name.toLowerCase().compareTo(b.name.toLowerCase());
             });
           } catch (e, st) {
@@ -192,6 +201,7 @@ class _ExtraItem {
   final int stockUnits;
   final String? variant;
   final int posOrder;
+  final int listIndex;
   final Map<String, dynamic> raw;
   _ExtraItem({
     required this.id,
@@ -202,6 +212,7 @@ class _ExtraItem {
     required this.stockUnits,
     required this.variant,
     required this.posOrder,
+    required this.listIndex,
     required this.raw,
   });
 }

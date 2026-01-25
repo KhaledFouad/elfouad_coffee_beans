@@ -9,20 +9,32 @@ Stream<List<ExtraItem>> extrasStreamByCategory(String category) {
       .where('category', isEqualTo: category)
       .where('active', isEqualTo: true)
       .orderBy('posOrder'); // قد يطلب Index أول مرة
-  return q.snapshots().map(
-    (s) =>
+  return q.snapshots().map((s) {
+    final items =
         s.docs
+            .asMap()
+            .entries
             .map(
-              (d) =>
-                  ExtraItem.fromDoc(d as DocumentSnapshot<Map<String, dynamic>>),
+              (entry) => (
+                item: ExtraItem.fromDoc(
+                  entry.value as DocumentSnapshot<Map<String, dynamic>>,
+                ),
+                index: entry.key,
+              ),
             )
-            .toList()
-          ..sort((a, b) {
-            final order = a.posOrder.compareTo(b.posOrder);
-            if (order != 0) return order;
-            return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-          }),
-  );
+            .toList();
+
+    items.sort((a, b) {
+      final order = a.item.posOrder.compareTo(b.item.posOrder);
+      if (order != 0) return order;
+      if (a.item.posOrder == 999999 && b.item.posOrder == 999999) {
+        return a.index.compareTo(b.index);
+      }
+      return a.item.name.toLowerCase().compareTo(b.item.name.toLowerCase());
+    });
+
+    return [for (final it in items) it.item];
+  });
 }
 
 /// Sell N pieces from an extra item (transaction).

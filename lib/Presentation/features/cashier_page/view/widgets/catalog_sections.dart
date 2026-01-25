@@ -47,7 +47,10 @@ class DrinksGrid extends StatelessWidget {
         final q = query.trim().toLowerCase();
         final items =
             snap.data!.docs
-                .map((doc) {
+                .asMap()
+                .entries
+                .map((entry) {
+                  final doc = entry.value;
                   final data = doc.data();
                   final name = (data['name'] ?? '').toString();
                   final image = (data['image'] ?? 'assets/drinks.jpg')
@@ -62,6 +65,7 @@ class DrinksGrid extends StatelessWidget {
                     image: image,
                     price: sellPrice,
                     posOrder: posOrder,
+                    listIndex: entry.key,
                     data: data,
                   );
                 })
@@ -73,6 +77,9 @@ class DrinksGrid extends StatelessWidget {
         items.sort((a, b) {
           final order = a.posOrder.compareTo(b.posOrder);
           if (order != 0) return order;
+          if (a.posOrder == 999999 && b.posOrder == 999999) {
+            return a.listIndex.compareTo(b.listIndex);
+          }
           final nameCmp =
               a.name.toLowerCase().compareTo(b.name.toLowerCase());
           if (nameCmp != 0) return nameCmp;
@@ -138,12 +145,15 @@ class SinglesGrid extends StatelessWidget {
         }
 
         final Map<String, SingleGroup> groups = {};
+        final Map<String, int> groupIndex = {};
+        var index = 0;
         for (final doc in snap.data!.docs) {
           final data = doc.data();
           final name = (data['name'] ?? '').toString();
           final image = (data['image'] ?? 'assets/singles.jpg').toString();
           final variant = (data['variant'] ?? '').toString().trim();
           final posOrder = _posOrderValue(data['posOrder']);
+          final currentIndex = index++;
 
           final sellPerKg = (data['sellPricePerKg'] is num)
               ? (data['sellPricePerKg'] as num).toDouble()
@@ -161,6 +171,7 @@ class SinglesGrid extends StatelessWidget {
               image: image,
               posOrder: posOrder,
             );
+            groupIndex[name] = currentIndex;
           } else if (posOrder < groups[name]!.posOrder) {
             final existing = groups[name]!;
             groups[name] = SingleGroup(
@@ -190,6 +201,11 @@ class SinglesGrid extends StatelessWidget {
               ..sort((a, b) {
                 final order = a.posOrder.compareTo(b.posOrder);
                 if (order != 0) return order;
+                if (a.posOrder == 999999 && b.posOrder == 999999) {
+                  return (groupIndex[a.name] ?? 0).compareTo(
+                    groupIndex[b.name] ?? 0,
+                  );
+                }
                 return a.name.toLowerCase().compareTo(b.name.toLowerCase());
               });
 
@@ -251,12 +267,15 @@ class BlendsGrid extends StatelessWidget {
         }
 
         final Map<String, BlendGroup> groups = {};
+        final Map<String, int> groupIndex = {};
+        var index = 0;
         for (final doc in snap.data!.docs) {
           final data = doc.data();
           final name = (data['name'] ?? '').toString();
           final image = (data['image'] ?? 'assets/blends.jpg').toString();
           final variant = (data['variant'] ?? '').toString().trim();
           final posOrder = _posOrderValue(data['posOrder']);
+          final currentIndex = index++;
 
           final sellPerKg = (data['sellPricePerKg'] is num)
               ? (data['sellPricePerKg'] as num).toDouble()
@@ -278,6 +297,7 @@ class BlendsGrid extends StatelessWidget {
               image: image,
               posOrder: posOrder,
             );
+            groupIndex[name] = currentIndex;
           } else if (posOrder < groups[name]!.posOrder) {
             final existing = groups[name]!;
             groups[name] = BlendGroup(
@@ -309,6 +329,11 @@ class BlendsGrid extends StatelessWidget {
               ..sort((a, b) {
                 final order = a.posOrder.compareTo(b.posOrder);
                 if (order != 0) return order;
+                if (a.posOrder == 999999 && b.posOrder == 999999) {
+                  return (groupIndex[a.name] ?? 0).compareTo(
+                    groupIndex[b.name] ?? 0,
+                  );
+                }
                 return a.name.toLowerCase().compareTo(b.name.toLowerCase());
               });
 
@@ -373,7 +398,10 @@ class ExtrasGrid extends StatelessWidget {
         final q = query.trim().toLowerCase();
         final items =
             snap.data!.docs
-                .map((doc) {
+                .asMap()
+                .entries
+                .map((entry) {
+                  final doc = entry.value;
                   final data = doc.data();
                   final name = (data['name'] ?? '').toString();
                   final image = (data['image'] ?? 'assets/cookies.png')
@@ -395,6 +423,7 @@ class ExtrasGrid extends StatelessWidget {
                     price: priceSell,
                     stock: stock,
                     posOrder: posOrder,
+                    listIndex: entry.key,
                     raw: data,
                   );
                 })
@@ -406,6 +435,9 @@ class ExtrasGrid extends StatelessWidget {
               ..sort((a, b) {
                 final order = a.posOrder.compareTo(b.posOrder);
                 if (order != 0) return order;
+                if (a.posOrder == 999999 && b.posOrder == 999999) {
+                  return a.listIndex.compareTo(b.listIndex);
+                }
                 return a.name.toLowerCase().compareTo(b.name.toLowerCase());
               });
 
