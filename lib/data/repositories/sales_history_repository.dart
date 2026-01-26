@@ -149,6 +149,7 @@ class SalesHistoryRepository {
 
       final double totalCost = _parseDouble(data['total_cost']);
       final double totalPrice = _parseDouble(data['total_price']);
+      final bool isComplimentary = data['is_complimentary'] == true;
 
       final components = (data['components'] as List?)
           ?.map((e) => (e as Map).cast<String, dynamic>())
@@ -169,7 +170,7 @@ class SalesHistoryRepository {
         transaction.update(ref, {'components': components});
       }
 
-      final newProfit = totalPrice - totalCost;
+      final newProfit = isComplimentary ? 0.0 : totalPrice - totalCost;
       final now = Timestamp.now();
       final paymentEvents = _appendPaymentEvent(data, dueAmount, now);
 
