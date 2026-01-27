@@ -376,7 +376,6 @@ class ExtrasGrid extends StatelessWidget {
   static final Stream<QuerySnapshot<Map<String, dynamic>>> _stream =
       FirebaseFirestore.instance
           .collection('extras')
-          .where('category', isEqualTo: 'الإضافات')
           .orderBy('posOrder')
           .snapshots();
 
@@ -389,10 +388,10 @@ class ExtrasGrid extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
-          return const Center(child: Text(AppStrings.errorLoadingExtras));
+          return const Center(child: Text(AppStrings.errorLoadingCookies));
         }
         if (!snap.hasData || snap.data!.docs.isEmpty) {
-          return const Center(child: Text(AppStrings.emptyExtras));
+          return const Center(child: Text(AppStrings.emptyCookies));
         }
 
         final q = query.trim().toLowerCase();
@@ -428,6 +427,8 @@ class ExtrasGrid extends StatelessWidget {
                   );
                 })
                 .where((it) {
+                  final isActive = (it.raw['active'] ?? true) == true;
+                  if (!isActive) return false;
                   if (q.isEmpty) return true;
                   return it.name.toLowerCase().contains(q);
                 })
