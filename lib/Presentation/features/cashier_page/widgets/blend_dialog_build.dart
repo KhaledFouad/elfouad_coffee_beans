@@ -327,7 +327,7 @@ mixin _BlendDialogBuild on _BlendDialogStateBase {
 
                           if (showSidePad) {
                             return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Expanded(child: details),
                                 const SizedBox(width: 12),
