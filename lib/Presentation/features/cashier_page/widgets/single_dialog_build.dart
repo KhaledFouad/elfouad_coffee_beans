@@ -318,18 +318,21 @@ mixin _SingleDialogBuild on _SingleDialogStateBase {
                           );
 
                           if (showSidePad) {
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(child: details),
-                                const SizedBox(width: 12),
-                                SizedBox(
-                                  width: sidePadWidth,
-                                  child: _numPad(
-                                    allowDot: _padTarget == _PadTarget.money,
+                            return IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(child: details),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: sidePadWidth,
+                                    child: _numPad(
+                                      allowDot: _padTarget == _PadTarget.money,
+                                      maxWidth: sidePadWidth,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             );
                           }
 
@@ -343,6 +346,7 @@ mixin _SingleDialogBuild on _SingleDialogStateBase {
                                     ? _numPad(
                                         allowDot:
                                             _padTarget == _PadTarget.money,
+                                        maxWidth: constraints.maxWidth,
                                       )
                                     : const SizedBox.shrink(),
                               ),

@@ -326,18 +326,21 @@ mixin _BlendDialogBuild on _BlendDialogStateBase {
                           );
 
                           if (showSidePad) {
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(child: details),
-                                const SizedBox(width: 12),
-                                SizedBox(
-                                  width: sidePadWidth,
-                                  child: _numPad(
-                                    allowDot: _padTarget == _PadTarget.price,
+                            return IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(child: details),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: sidePadWidth,
+                                    child: _numPad(
+                                      allowDot: _padTarget == _PadTarget.price,
+                                      maxWidth: sidePadWidth,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             );
                           }
 
@@ -351,6 +354,7 @@ mixin _BlendDialogBuild on _BlendDialogStateBase {
                                     ? _numPad(
                                         allowDot:
                                             _padTarget == _PadTarget.price,
+                                        maxWidth: constraints.maxWidth,
                                       )
                                     : const SizedBox.shrink(),
                               ),

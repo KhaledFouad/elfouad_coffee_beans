@@ -93,7 +93,7 @@ abstract class _BlendDialogStateBase extends State<BlendDialog> {
   Widget _ginsengCard();
   void _openPad(_PadTarget target);
   void _closePad();
-  Widget _numPad({required bool allowDot});
+  Widget _numPad({required bool allowDot, required double maxWidth});
 
   CartLine _buildCartLine();
   Future<void> _commitSale();
